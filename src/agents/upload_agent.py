@@ -100,21 +100,22 @@ class UploadAgent:
         youtube = build('youtube', 'v3', credentials=creds)
 
         status_dict = {
-            'privacyStatus': 'private' if (publish_time_str or dry_run) else 'public',
+            'privacyStatus': 'private', # User requested it be private for now
             'selfDeclaredMadeForKids': False, 
         }
 
-        if publish_time_str and not dry_run:
-            try:
-                now = datetime.utcnow()
-                h, m = map(int, publish_time_str.split(':'))
-                target = now.replace(hour=h, minute=m, second=0, microsecond=0)
-                if target <= now:
-                    target += timedelta(days=1)
-                status_dict['publishAt'] = target.isoformat() + "Z"
-                logger.info("[UploadAgent] Scheduling video to publish at %s", status_dict['publishAt'])
-            except Exception as e:
-                logger.warning("[UploadAgent] Failed to parse publish_time_str '%s', uploading immediately as private: %s", publish_time_str, e)
+        # User requested immediate upload with no scheduling:
+        # if publish_time_str and not dry_run:
+        #     try:
+        #         now = datetime.utcnow()
+        #         h, m = map(int, publish_time_str.split(':'))
+        #         target = now.replace(hour=h, minute=m, second=0, microsecond=0)
+        #         if target <= now:
+        #             target += timedelta(days=1)
+        #         status_dict['publishAt'] = target.isoformat() + "Z"
+        #         logger.info("[UploadAgent] Scheduling video to publish at %s", status_dict['publishAt'])
+        #     except Exception as e:
+        #         logger.warning("[UploadAgent] Failed to parse publish_time_str '%s', uploading immediately as private: %s", publish_time_str, e)
 
         body = {
             'snippet': {
