@@ -54,7 +54,7 @@ quota:
   upload_cost_units: 1600
 
 learning:
-  min_videos_before_adjusting: 20
+  min_videos_before_adjusting: 5
   metrics_pulled: ["views", "likes", "comments", "average_view_duration", "average_view_percentage"]
 
 long_form:
