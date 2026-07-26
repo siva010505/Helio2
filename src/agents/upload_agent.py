@@ -167,9 +167,7 @@ class UploadAgent:
         
         # Write shared pointer file
         try:
-            shared_dir = Path("../shared")
-            shared_dir.mkdir(parents=True, exist_ok=True)
-            shared_file = shared_dir / "latest_long_form.json"
+            shared_file = Path("latest_long_form.json")
             
             import json
             with open(shared_file, "w") as f:

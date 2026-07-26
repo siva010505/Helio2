@@ -66,6 +66,12 @@ jobs:
           echo "${{ secrets.YOUTUBE_CLIENT_SECRET_B64 }}" | base64 --decode > client_secret.json
           echo "${{ secrets.YOUTUBE_TOKEN_PICKLE_B64 }}" | base64 --decode > token.pickle
 
+      - name: Download Shorts Database
+        run: |
+          curl -H "Authorization: token ${{ secrets.REPO1_ACCESS_TOKEN }}" \
+               -L -o shorts_database.db \
+               https://raw.githubusercontent.com/siva010505/Helio/master/data/agent.db
+
       - name: Run Daily Pipeline
         env:
           NIM_API_KEY: ${{ secrets.NIM_API_KEY }}
@@ -102,6 +108,27 @@ jobs:
             git commit -m "chore(db): auto-update agent.db state [skip ci]"
             git pull --rebase --autostash origin master
             git push
-          else
             echo "No changes in database to commit."
+          fi
+
+      - name: Send JSON pointer to Repo 1
+        run: |
+          # Clone Repo 1 into a temporary folder
+          git clone https://x-access-token:${{ secrets.REPO1_ACCESS_TOKEN }}@github.com/siva010505/Helio.git repo1_temp
+          
+          # Ensure the shared directory exists and copy the JSON file
+          mkdir -p repo1_temp/shared
+          # Adjusting this cp command since upload_agent.py outputs to current directory root
+          if [ -f latest_long_form.json ]; then
+            cp latest_long_form.json repo1_temp/shared/
+            
+            # Commit and push the file into Repo 1
+            cd repo1_temp
+            git config user.name "Long-form Bot"
+            git config user.email "bot@longform.com"
+            git add shared/latest_long_form.json
+            git commit -m "Auto-update cross promotion pointer"
+            git push
+          else
+            echo "latest_long_form.json not found, skipping cross-repo pointer update."
           fi

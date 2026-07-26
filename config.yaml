@@ -66,4 +66,4 @@ long_form:
   upload_interval_days: 3
   maturity_days: 7
   early_informational_pull_hours: 60
-  helio_shorts_db_path: "../Helio/data/helio.db"
+  helio_shorts_db_path: "shorts_database.db"
