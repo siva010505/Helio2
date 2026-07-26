@@ -19,8 +19,8 @@ from typing import Dict, Any, List
 logger = logging.getLogger(__name__)
 
 VISUAL_PLANNER_PROMPT = """\
-You are an expert video director for YouTube Shorts. Your job is to break down the provided script into distinct visual scenes.
-Based on the natural speaking pace, aim for each scene to be extremely short, covering only 3 to 8 words of text (averaging {scene_target_seconds} seconds). DO NOT group long sentences into a single scene; break them up aggressively to maintain a fast, engaging pace!
+You are an expert video director for long-form YouTube videos. Your job is to break down the provided script into distinct visual scenes.
+Based on the natural speaking pace, aim for each scene to cover roughly {scene_target_seconds} seconds of speech. Maintain a measured, engaging pace suitable for long-form storytelling.
 
 For each scene, provide:
 - "scene_number": The sequential number (1, 2, 3...)
@@ -65,9 +65,9 @@ class VisualPlannerAgent:
         logger.info("[VisualPlannerAgent] Planning visuals for script...")
         user_prompt = f"Break down this script into scenes:\n\n{script_text}"
         
-        target_seconds = 2.5
+        target_seconds = 15.0
         if channel_config:
-            target_seconds = channel_config.get("video", {}).get("scene_target_seconds", 2.5)
+            target_seconds = channel_config.get("long_form", {}).get("scene_target_seconds", 15.0)
             
         system_prompt = VISUAL_PLANNER_PROMPT.replace("{scene_target_seconds}", str(target_seconds))
 

@@ -23,8 +23,9 @@ from src.db.models import Video, PerformanceMetric
 
 logger = logging.getLogger(__name__)
 
-# The maturity window — no video younger than this will be analysed
-MATURITY_HOURS = 72
+# Default maturity window if not in config
+MATURITY_DAYS = 7
+EARLY_PULL_HOURS = 60
 
 
 class AnalyticsAgent:
@@ -57,7 +58,11 @@ class AnalyticsAgent:
         - Videos with a metric pull in the last 24h → skipped (already fresh)
         - Everything else → eligible
         """
-        cutoff = datetime.utcnow() - timedelta(hours=MATURITY_HOURS)
+        maturity_days = self.config.get("long_form", {}).get("maturity_days", MATURITY_DAYS)
+        early_pull_hours = self.config.get("long_form", {}).get("early_informational_pull_hours", EARLY_PULL_HOURS)
+        
+        maturity_cutoff = datetime.utcnow() - timedelta(days=maturity_days)
+        early_cutoff = datetime.utcnow() - timedelta(hours=early_pull_hours)
         last_24h = datetime.utcnow() - timedelta(hours=24)
 
         eligible = (
@@ -65,7 +70,7 @@ class AnalyticsAgent:
             .filter(
                 Video.status == "uploaded",
                 Video.youtube_video_id.isnot(None),
-                Video.upload_time <= cutoff,   # 72-hour gate
+                Video.upload_time <= early_cutoff,   # At least early pull age
             )
             .all()
         )
@@ -87,7 +92,7 @@ class AnalyticsAgent:
         logger.info(
             "[AnalyticsAgent] %d videos eligible for metrics pull (>= %d h old).",
             len(result),
-            MATURITY_HOURS,
+            early_pull_hours,
         )
         return result
 

@@ -16,7 +16,7 @@ def search_pexels(query: str, limit: int = 3, api_key: str = None) -> List[str]:
     if not api_key: return []
     url = "https://api.pexels.com/videos/search"
     headers = {"Authorization": api_key}
-    params = {"query": query, "per_page": limit, "orientation": "portrait"}
+    params = {"query": query, "per_page": limit, "orientation": "landscape"}
     try:
         r = requests.get(url, headers=headers, params=params, timeout=10)
         r.raise_for_status()
@@ -58,7 +58,7 @@ def search_unsplash(query: str, limit: int = 3, api_key: str = None) -> List[str
     if not api_key: return []
     url = "https://api.unsplash.com/search/photos"
     headers = {"Authorization": f"Client-ID {api_key}"}
-    params = {"query": query, "per_page": limit, "orientation": "portrait"}
+    params = {"query": query, "per_page": limit, "orientation": "landscape"}
     try:
         r = requests.get(url, headers=headers, params=params, timeout=10)
         r.raise_for_status()

@@ -24,7 +24,7 @@ from src.db.models import Video, PerformanceMetric, PromptVersion
 logger = logging.getLogger(__name__)
 
 # Agents whose prompts can be dynamically improved
-IMPROVABLE_AGENTS = ["script_agent", "seo_agent", "scoring_agent"]
+IMPROVABLE_AGENTS = ["script_agent_longform", "seo_agent_longform", "scoring_agent_longform"]
 
 ANALYSIS_SYSTEM_PROMPT = """\
 You are a senior YouTube analytics strategist and data scientist.
@@ -76,12 +76,16 @@ class EvaluationAgent:
         already passed the 72-hour maturity window.
         Only includes records where we have at least views > 0.
         """
+        maturity_days = self.config.get("long_form", {}).get("maturity_days", 7)
+        cutoff = datetime.utcnow() - timedelta(days=maturity_days)
+        
         records = (
             self.db.query(PerformanceMetric, Video)
             .join(Video, PerformanceMetric.video_id == Video.id)
             .filter(
                 PerformanceMetric.views > 0,
                 Video.youtube_video_id.isnot(None),
+                Video.upload_time <= cutoff,
             )
             .order_by(PerformanceMetric.pulled_at.desc())
             .limit(50)   # cap context size for LLM

@@ -80,9 +80,11 @@ class UploadAgent:
         tags: list,
         thumbnail_path: str = None,
         publish_time_str: str = None,
+        dry_run: bool = False,
     ) -> str:
         """
         Uploads the video to YouTube.
+        If dry_run is True, forces privacyStatus to 'private' and ignores scheduling.
         Returns the new YouTube Video ID.
         """
         logger.info("[UploadAgent] Starting authentication for YouTube API...")
@@ -98,11 +100,11 @@ class UploadAgent:
         youtube = build('youtube', 'v3', credentials=creds)
 
         status_dict = {
-            'privacyStatus': 'private' if publish_time_str else 'public',  # Must be private for publishAt, otherwise public
+            'privacyStatus': 'private' if (publish_time_str or dry_run) else 'public',
             'selfDeclaredMadeForKids': False, 
         }
 
-        if publish_time_str:
+        if publish_time_str and not dry_run:
             try:
                 now = datetime.utcnow()
                 h, m = map(int, publish_time_str.split(':'))
@@ -162,5 +164,23 @@ class UploadAgent:
 
         video_id = response.get('id')
         logger.info("[UploadAgent] Video uploaded successfully! Video ID: %s", video_id)
+        
+        # Write shared pointer file
+        try:
+            shared_dir = Path("../shared")
+            shared_dir.mkdir(parents=True, exist_ok=True)
+            shared_file = shared_dir / "latest_long_form.json"
+            
+            import json
+            with open(shared_file, "w") as f:
+                json.dump({
+                    "video_id": video_id,
+                    "title": title,
+                    "url": f"https://youtu.be/{video_id}",
+                    "uploaded_at": datetime.utcnow().isoformat() + "Z"
+                }, f, indent=2)
+            logger.info("[UploadAgent] Wrote shared pointer to %s", shared_file)
+        except Exception as e:
+            logger.error("[UploadAgent] Failed to write shared pointer file: %s", e)
 
         return video_id

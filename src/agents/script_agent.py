@@ -25,13 +25,12 @@ logger = logging.getLogger(__name__)
 
 # Default prompt for script generation if none exists in the DB
 DEFAULT_SCRIPT_PROMPT = """\
-You are an expert YouTube Shorts scriptwriter. Your goal is to write a highly engaging, vertical short-form video script based on the provided topic.
+You are an expert YouTube scriptwriter. Your goal is to write a highly engaging mini-story based on the provided topic.
 
 The script MUST follow this narrative mini-story arc structure:
 1. Hook (first 2-3 seconds): Grab attention immediately with a setup.
 2. Core Content/Tension: Deliver the main information and build tension/complication.
 3. Payoff/Resolution: A surprising fact, resolution, or original insight.
-4. CTA (Call to Action): A quick sign-off (e.g. "Subscribe for more").
 
 Your constraints:
 - Tone: {tone}
@@ -44,8 +43,7 @@ Your constraints:
     "alternative_hooks": ["Alt hook 1", "Alt hook 2"],
     "core_content": "The main body of the script...",
     "payoff": "The twist or conclusion...",
-    "cta": "The call to action line...",
-    "full_script": "The complete script text combining the hook, core, payoff, and cta"
+    "full_script": "The complete script text combining the hook, core, and payoff"
   }}
 """
 
@@ -64,7 +62,7 @@ class ScriptAgent:
             self.db_session.query(PromptVersion)
             .filter(
                 PromptVersion.channel_id == channel_id,
-                PromptVersion.agent_name == "script_agent",
+                PromptVersion.agent_name == "script_agent_longform",
             )
             .order_by(PromptVersion.created_at.desc())
             .first()
@@ -95,7 +93,11 @@ class ScriptAgent:
         tone = channel_config.get("tone", "energetic and fast-paced")
         brand = channel_config.get("brand", {})
         commentary_style = brand.get("commentary_style", "insightful and thought-provoking")
-        target_length = channel_config.get("target_length_seconds", 55)
+        target_length = channel_config.get("long_form", {}).get("target_length_seconds", 560)
+        stories_per_video = channel_config.get("long_form", {}).get("stories_per_video", 5)
+        # Allocate time per story, leaving some buffer for cold open and bridges
+        target_length = int((target_length * 0.85) / stories_per_video)
+        
         # 150 words is roughly 1 minute of fast-paced speech
         word_count = int(150 * (target_length / 60.0))
         

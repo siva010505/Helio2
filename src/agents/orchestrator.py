@@ -26,8 +26,8 @@ import json
 import logging
 from datetime import datetime
 
-from src.db.models import Channel, RunLog
-from src.agents.research_agent import ResearchAgent
+from src.db.models import Channel, RunLog, Video
+from src.agents.longform_research_agent import LongformResearchAgent
 from src.agents.scoring_agent import ScoringAgent
 
 logger = logging.getLogger(__name__)
@@ -135,12 +135,29 @@ class OrchestratorAgent:
     def _run_channel(self, ch_cfg: dict, dry_run: bool) -> dict:
         """Run research → scoring → pipeline for a single channel."""
         channel_name = ch_cfg.get("name", "unknown")
-        videos_per_day = ch_cfg.get("videos_per_day", 1)
+        stories_per_video = ch_cfg.get("long_form", {}).get("stories_per_video", 5)
+        interval_days = ch_cfg.get("long_form", {}).get("upload_interval_days", 3)
 
         logger.info(
-            "[Orchestrator] ── Channel: %s ── Target: %d video(s) today",
-            channel_name, videos_per_day,
+            "[Orchestrator] ── Channel: %s ── Target: 1 compilation (%d stories)",
+            channel_name, stories_per_video,
         )
+
+        # Check if we should skip today based on upload interval
+        channel = self._ensure_channel_in_db(ch_cfg)
+        ch_cfg["db_id"] = channel.id
+        
+        last_video = self.db.query(Video).filter(
+            Video.channel_id == channel.id,
+            Video.status == "uploaded"
+        ).order_by(Video.upload_time.desc()).first()
+        
+        if last_video and last_video.upload_time:
+            days_since = (datetime.utcnow() - last_video.upload_time).days
+            if days_since < interval_days and not dry_run:
+                msg = f"Skipping: only {days_since} days since last upload (interval is {interval_days})"
+                logger.info("[Orchestrator] %s", msg)
+                return {"channel": channel_name, "skipped": True, "reason": msg}
 
         ch_summary = {
             "channel": channel_name,
@@ -155,7 +172,7 @@ class OrchestratorAgent:
         ch_cfg["db_id"] = channel.id
 
         # ── Phase 2: Research ─────────────────────────────────────────
-        research_agent = ResearchAgent(self.db, self.llm)
+        research_agent = LongformResearchAgent(self.db, self.llm, self.config)
         try:
             candidates = research_agent.fetch_candidate_topics(
                 channel_config=ch_cfg,
@@ -180,9 +197,9 @@ class OrchestratorAgent:
             logger.warning(
                 "[Orchestrator] LLMClient not provided — cannot score. "
                 "Selecting first %d candidates by order.",
-                videos_per_day,
+                stories_per_video,
             )
-            selected = candidates[:videos_per_day]
+            selected = candidates[:stories_per_video]
         else:
             scoring_agent = ScoringAgent(self.llm, self.db)
             try:
@@ -190,7 +207,7 @@ class OrchestratorAgent:
                     channel_config=ch_cfg,
                     channel_id=channel.id,
                     candidates=candidates,
-                    videos_per_day=videos_per_day,
+                    videos_per_day=stories_per_video,
                 )
             except Exception as exc:
                 msg = f"ScoringAgent failed: {exc}"
@@ -209,40 +226,40 @@ class OrchestratorAgent:
             "[Orchestrator] Scoring complete: %d topic(s) selected.", len(selected)
         )
 
-        # ── Phase 3+: Video Pipeline (stub — implemented in later phases) ─
-        for idx, topic in enumerate(selected):
-            try:
-                upload_times = ch_cfg.get("upload_times", [])
-                publish_time_str = upload_times[idx] if idx < len(upload_times) else None
-                video_result = self._run_video_pipeline(
-                    ch_cfg, channel, topic, dry_run=dry_run, publish_time_str=publish_time_str
-                )
-                ch_summary["videos_created"].append(video_result)
-            except Exception as exc:
-                msg = f"Pipeline failed for '{topic['topic_text']}': {exc}"
-                logger.error("[Orchestrator] %s", msg, exc_info=True)
-                ch_summary["errors"].append(msg)
+        # ── Phase 3+: Video Pipeline ─
+        try:
+            upload_times = ch_cfg.get("upload_times", [])
+            publish_time_str = upload_times[0] if upload_times else None
+            
+            # Pass ALL selected stories to the compilation pipeline
+            video_result = self._run_video_pipeline(
+                ch_cfg, channel, selected, dry_run=dry_run, publish_time_str=publish_time_str
+            )
+            ch_summary["videos_created"].append(video_result)
+        except Exception as exc:
+            msg = f"Pipeline failed for compilation: {exc}"
+            logger.error("[Orchestrator] %s", msg, exc_info=True)
+            ch_summary["errors"].append(msg)
 
         return ch_summary
 
     def _run_video_pipeline(
-        self, ch_cfg: dict, channel: Channel, topic: dict, dry_run: bool, publish_time_str: str = None
+        self, ch_cfg: dict, channel: Channel, topics: list, dry_run: bool, publish_time_str: str = None
     ) -> dict:
         """
-        Call the video creation pipeline for a single selected topic.
-        Phase 3+ will fill this in. For now, it is a structured stub.
+        Call the video creation pipeline for the selected topics.
         """
         from src.pipeline import run_pipeline
 
         logger.info(
-            "[Orchestrator] Starting pipeline for topic: %s", topic["topic_text"]
+            "[Orchestrator] Starting compilation pipeline with %d topics", len(topics)
         )
         result = run_pipeline(
             channel_config=ch_cfg,
-            topic=topic,
+            topics=topics,
             db_session=self.db,
             llm_client=self.llm,
             dry_run=dry_run,
             publish_time_str=publish_time_str,
         )
-        return result or {"topic": topic["topic_text"], "status": "stub — not yet implemented"}
+        return result or {"status": "stub — not yet implemented"}

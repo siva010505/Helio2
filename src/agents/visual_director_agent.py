@@ -88,89 +88,6 @@ class VisualDirectorAgent:
             
         return aligned
 
-    def insert_punch_cutaways(self, final_scenes: List[Dict], punch_moments: List[Dict], channel_config: Dict) -> List[Dict]:
-        from src.services.stock_search import search_pexels, search_pixabay, search_unsplash
-        import requests
-        
-        punch_cfg = channel_config.get("editing", {}).get("punch", {})
-        cutaway_duration = punch_cfg.get("primary_cutaway_duration_seconds", 0.5)
-        
-        primary_punches = sorted([p for p in punch_moments if p.get("tier") == "primary"], key=lambda x: x["timestamp"])
-        secondary_punches = [p for p in punch_moments if p.get("tier") == "secondary"]
-        new_scenes = []
-        
-        for scene in final_scenes:
-            scene_start = scene["start_time"]
-            scene_end = scene["end_time"]
-            
-            scene_punches = [p for p in primary_punches if scene_start <= p["timestamp"] < scene_end]
-            
-            if not scene_punches:
-                new_scenes.append(scene)
-                continue
-                
-            current_start = scene_start
-            
-            for p in scene_punches:
-                punch_time = p["timestamp"]
-                
-                if punch_time > current_start:
-                    s1 = scene.copy()
-                    s1["start_time"] = current_start
-                    s1["end_time"] = punch_time
-                    new_scenes.append(s1)
-                    
-                query = p["word"]
-                logger.info("[VisualDirector] Fetching cutaway for punch word: '%s'", query)
-                
-                urls = []
-                urls.extend(search_pexels(query, limit=1, api_key=self.pexels_api_key))
-                urls.extend(search_pixabay(query, limit=1, api_key=self.pixabay_api_key))
-                urls.extend(search_unsplash(query, limit=1, api_key=self.unsplash_api_key))
-                
-                cutaway_path = None
-                for url in urls:
-                    ext = ".jpg" if "unsplash" in url else ".mp4"
-                    cand_path = self.cache_dir / f"punch_cutaway_{len(new_scenes)}{ext}"
-                    try:
-                        r = requests.get(url, stream=True, timeout=20)
-                        r.raise_for_status()
-                        with open(cand_path, "wb") as f:
-                            for chunk in r.iter_content(chunk_size=8192):
-                                f.write(chunk)
-                        cutaway_path = str(cand_path)
-                        break
-                    except Exception as exc:
-                        logger.warning("Failed to download cutaway %s: %s", url, exc)
-                
-                if cutaway_path:
-                    s_cutaway = scene.copy()
-                    s_cutaway["start_time"] = punch_time
-                    s_cutaway["end_time"] = punch_time + cutaway_duration
-                    s_cutaway["video_path"] = cutaway_path
-                    new_scenes.append(s_cutaway)
-                    current_start = punch_time + cutaway_duration
-                else:
-                    current_start = punch_time
-                    
-            if current_start < scene_end:
-                s_end = scene.copy()
-                s_end["start_time"] = current_start
-                s_end["end_time"] = scene_end
-                new_scenes.append(s_end)
-                
-        # Inject secondary zoom flashes as local offsets
-        for scene in new_scenes:
-            st = scene["start_time"]
-            et = scene["end_time"]
-            flashes = []
-            for p in secondary_punches:
-                if st <= p["timestamp"] < et:
-                    flashes.append(p["timestamp"] - st)
-            if flashes:
-                scene["zoom_flash_at"] = flashes
-                
-        return new_scenes
 
     def _extract_frame_base64(self, file_path: str) -> str:
         from PIL import Image
@@ -220,13 +137,13 @@ class VisualDirectorAgent:
         brand = self.config.get("channels", [{}])[0].get("brand", {})
         font_path = brand.get("font", os.path.join(os.getcwd(), "assets", "fonts", "Roboto-Bold.ttf"))
         
-        bg = ColorClip(size=(1080, 1920), color=(30, 30, 30), duration=duration)
+        bg = ColorClip(size=(1920, 1080), color=(30, 30, 30), duration=duration)
         txt = TextClip(
             font=font_path,
             text=text,
             font_size=80,
             color="white",
-            size=(900, None),
+            size=(1600, None),
             method="caption",
             text_align="center"
         )

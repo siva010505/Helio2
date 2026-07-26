@@ -1,0 +1,216 @@
+"""
+Longform Research Agent
+
+Role:
+Discovers candidate topics for the long-form channel by:
+1. Querying the original Helio (Shorts) database for top-performing recent videos.
+2. Supplementing with LLM brainstorming if needed.
+
+Persists to Helio2 database.
+"""
+
+import os
+import json
+import logging
+from datetime import datetime, timedelta
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+
+from src.db.models import Topic, Channel, Video, PerformanceMetric
+
+logger = logging.getLogger(__name__)
+
+DEDUP_LOOKBACK_DAYS = 30
+MAX_CANDIDATES = 15
+MIN_CANDIDATES = 3
+
+BRAINSTORM_PROMPT = """\
+You are an expert content strategist for a YouTube channel.
+Brainstorm a list of 15 highly engaging, evergreen, narrative-driven topic candidates for the following niche.
+Niche: {niche}
+
+Avoid recent news. Focus on psychological, behavioral, historical, or scientific mysteries that tell a compelling story.
+Output ONLY a valid JSON object matching this schema:
+{{
+    "candidates": [
+        {{
+            "title": "A highly engaging title under 50 characters",
+            "description": "A 1-2 sentence description of the narrative arc."
+        }}
+    ]
+}}
+"""
+
+def _deduplicate(
+    candidates: list[dict],
+    existing_topics: list[str],
+    seen_titles: set,
+) -> list[dict]:
+    from difflib import SequenceMatcher
+
+    def is_too_similar(a: str, b: str, threshold: float = 0.7) -> bool:
+        a_lower = a.lower()
+        b_lower = b.lower()
+        if a_lower in b_lower or b_lower in a_lower:
+            return True
+        return SequenceMatcher(None, a_lower, b_lower).ratio() >= threshold
+
+    accepted_titles: list[str] = []
+    unique = []
+
+    for c in candidates:
+        title = c["title"].strip()
+        if not title:
+            continue
+        if title in seen_titles:
+            continue
+        if any(is_too_similar(title, existing) for existing in existing_topics):
+            continue
+        if any(is_too_similar(title, accepted) for accepted in accepted_titles):
+            continue
+        seen_titles.add(title)
+        accepted_titles.append(title)
+        unique.append(c)
+
+    return unique
+
+
+class LongformResearchAgent:
+    def __init__(self, db_session, llm_client, config):
+        self.db = db_session
+        self.llm = llm_client
+        self.config = config
+        
+        # Setup read-only connection to Helio Shorts DB
+        shorts_db_path = self.config.get("long_form", {}).get("helio_shorts_db_path", "../Helio/data/agent.db")
+        # Support relative paths based on current working directory
+        if not shorts_db_path.startswith("sqlite:///"):
+            shorts_db_path = f"sqlite:///{shorts_db_path}"
+        
+        try:
+            self.shorts_engine = create_engine(shorts_db_path, connect_args={"check_same_thread": False})
+            self.ShortsSession = sessionmaker(bind=self.shorts_engine)
+        except Exception as e:
+            logger.error(f"[LongformResearchAgent] Failed to connect to Shorts DB: {e}")
+            self.ShortsSession = None
+
+    def _fetch_shorts_seeds(self) -> list[dict]:
+        """Fetch top performing shorts from the last 30 days as long-form seeds."""
+        if not self.ShortsSession:
+            return []
+            
+        session = self.ShortsSession()
+        try:
+            lookback = datetime.utcnow() - timedelta(days=30)
+            
+            # Query videos uploaded in last 30 days, sorted by views (or AVP)
+            results = (
+                session.query(Video, PerformanceMetric, Topic)
+                .join(PerformanceMetric, Video.id == PerformanceMetric.video_id)
+                .join(Topic, Video.topic_id == Topic.id)
+                .filter(Video.upload_time >= lookback)
+                .filter(Video.status == "uploaded")
+                .order_by(PerformanceMetric.views.desc())
+                .limit(10)
+                .all()
+            )
+            
+            seeds = []
+            for video, metrics, topic in results:
+                seeds.append({
+                    "title": topic.topic_text,
+                    "description": video.description or "",
+                    "source": "shorts_seed",
+                    "original_context": {
+                        "original_topic": topic.topic_text,
+                        "original_description": video.description,
+                        "metrics": {
+                            "views": metrics.views,
+                            "likes": metrics.likes,
+                            "avp": metrics.average_view_percentage
+                        }
+                    }
+                })
+            return seeds
+        except Exception as e:
+            logger.error(f"[LongformResearchAgent] Error querying Shorts DB: {e}")
+            return []
+        finally:
+            session.close()
+
+    def fetch_candidate_topics(
+        self,
+        channel_config: dict,
+        channel_id: int,
+    ) -> list[dict]:
+        niche = channel_config.get("niche", "")
+        logger.info("[LongformResearchAgent] Sourcing for niche: %s", niche)
+
+        lookback = datetime.utcnow() - timedelta(days=DEDUP_LOOKBACK_DAYS)
+        existing_topics: list[str] = [
+            row.topic_text
+            for row in self.db.query(Topic)
+            .filter(
+                Topic.channel_id == channel_id,
+                Topic.created_at >= lookback,
+                Topic.status.in_(["selected", "used"]),
+            )
+            .all()
+        ]
+
+        # 1. Fetch from Shorts DB
+        shorts_candidates = self._fetch_shorts_seeds()
+        logger.info(f"[LongformResearchAgent] Found {len(shorts_candidates)} seed candidates from Shorts DB.")
+
+        # 2. Brainstorm via LLM
+        try:
+            system_prompt = BRAINSTORM_PROMPT.format(niche=niche)
+            user_prompt = "Generate the JSON response with 15 candidates now."
+            
+            response = self.llm.generate_json(
+                system_prompt=system_prompt,
+                user_prompt=user_prompt,
+                temperature=0.8,
+                max_tokens=1500
+            )
+            llm_candidates = response.get("candidates", [])
+            for raw in llm_candidates:
+                raw["source"] = "llm_brainstorm"
+        except Exception as exc:
+            logger.error("[LongformResearchAgent] LLM brainstorming failed: %s", exc)
+            llm_candidates = []
+
+        all_raw = shorts_candidates + llm_candidates
+
+        # 3. Deduplicate
+        seen_titles: set[str] = set()
+        unique = _deduplicate(all_raw, existing_topics, seen_titles)
+        unique = unique[:MAX_CANDIDATES]
+
+        logger.info("[LongformResearchAgent] Unique candidates after dedup: %d", len(unique))
+
+        # 4. Persist to DB
+        persisted: list[dict] = []
+        for item in unique:
+            topic_row = Topic(
+                channel_id=channel_id,
+                topic_text=item["title"],
+                source=item["source"],
+                source_context_json=json.dumps(item.get("original_context", {})) if "original_context" in item else None,
+                status="candidate",
+            )
+            self.db.add(topic_row)
+            self.db.flush()
+
+            persisted.append(
+                {
+                    "db_id": topic_row.id,
+                    "channel_id": channel_id,
+                    "topic_text": item["title"],
+                    "description": item.get("description", ""),
+                    "source": item["source"],
+                }
+            )
+
+        self.db.commit()
+        return persisted

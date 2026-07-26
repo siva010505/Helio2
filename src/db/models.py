@@ -17,7 +17,8 @@ class Topic(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     channel_id = Column(Integer, ForeignKey('channels.id'))
     topic_text = Column(String, nullable=False)
-    source = Column(String)  # "trend_search" or "manual"
+    source = Column(String)  # "trend_search", "manual", "shorts_seed", "llm_brainstorm"
+    source_context_json = Column(Text, nullable=True)  # original context for sourced topics
     score = Column(Float)
     score_breakdown_json = Column(Text, nullable=True)  # JSON: {dimensions, composite, reasoning}
     status = Column(String, default="candidate")  # "candidate", "selected", "rejected", "used"

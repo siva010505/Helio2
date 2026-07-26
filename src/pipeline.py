@@ -26,36 +26,26 @@ logger = logging.getLogger(__name__)
 
 def run_pipeline(
     channel_config: dict,
-    topic: dict,
+    topics: list,
     db_session,
     llm_client=None,
     dry_run: bool = False,
     publish_time_str: str = None,
 ) -> dict:
     """
-    Run the full video creation pipeline for a single topic.
-
-    Args:
-        channel_config: Channel config block from config.yaml.
-        topic: Selected topic dict from ScoringAgent (must include 'db_id', 'topic_text').
-        db_session: SQLAlchemy session.
-        llm_client: LLMClient instance (shared).
-        dry_run: If True, skip the upload step.
-
-    Returns:
-        Result dict with keys: topic, status, youtube_video_id (if uploaded).
+    Run the full video creation pipeline for a compilation of topics.
     """
-    topic_text = topic.get("topic_text", "unknown")
-    topic_db_id = topic.get("db_id")
+    primary_topic_text = topics[0].get("topic_text", "unknown") if topics else "unknown"
+    topic_db_id = topics[0].get("db_id") if topics else None
 
     logger.info(
-        "[Pipeline] ── Starting pipeline for topic: '%s' (dry_run=%s)",
-        topic_text, dry_run,
+        "[Pipeline] ── Starting compilation pipeline with primary topic: '%s' (dry_run=%s)",
+        primary_topic_text, dry_run,
     )
 
     # ── Create a Video record immediately so we can track status ─────
     video = Video(
-        channel_id=topic.get("channel_id"),   # populated in Phase 3
+        channel_id=topics[0].get("channel_id") if topics else None,
         topic_id=topic_db_id,
         status="drafted",
         created_at=datetime.utcnow(),
@@ -64,7 +54,7 @@ def run_pipeline(
     db_session.commit()
 
     result = {
-        "topic": topic_text,
+        "primary_topic": primary_topic_text,
         "video_db_id": video.id,
         "status": "stub",
         "youtube_video_id": None,
@@ -72,13 +62,13 @@ def run_pipeline(
 
     try:
         # ── Phase 3: Script Generation ────────────────────────────
-        from src.agents.script_agent import ScriptAgent
-        script_data = ScriptAgent(llm_client, db_session).generate_script(topic, channel_config)
-        script_text = script_data.get("full_script")
+        from src.agents.compilation_assembler_agent import CompilationAssemblerAgent
+        compilation_data = CompilationAssemblerAgent(llm_client, db_session).assemble_compilation(topics, channel_config)
+        script_text = compilation_data.get("full_script")
         video.script_text = script_text
-        video.hook_style = script_data.get("hook")
+        video.hook_style = "compilation_cold_open"
         db_session.commit()
-        logger.info("[Pipeline] Phase 3 (Script) complete.")
+        logger.info("[Pipeline] Phase 3 (Compilation Script) complete.")
 
         # ── Phase 4: Voice Generation ──────────────────────────────
         from src.agents.voice_agent import VoiceAgent
@@ -89,7 +79,31 @@ def run_pipeline(
 
         # ── Phase 5: Visual Planning ───────────────────────────────
         from src.agents.visual_planner_agent import VisualPlannerAgent
-        shot_list = VisualPlannerAgent(llm_client).plan_visuals(script_text, channel_config)
+        visual_planner = VisualPlannerAgent(llm_client)
+        shot_list = []
+        
+        def plan_and_append(text_segment):
+            if not text_segment.strip(): return
+            scenes = visual_planner.plan_visuals(text_segment, channel_config)
+            shot_list.extend(scenes)
+
+        logger.info("[Pipeline] Planning visuals for cold open...")
+        plan_and_append(compilation_data["connective_tissue"]["cold_open"])
+        
+        for i, story in enumerate(compilation_data["stories"]):
+            logger.info("[Pipeline] Planning visuals for story %d...", i+1)
+            plan_and_append(story["script"])
+            if i < len(compilation_data["stories"]) - 1:
+                bridges = compilation_data["connective_tissue"].get("bridges", [])
+                bridge = bridges[i] if i < len(bridges) else ""
+                plan_and_append(bridge)
+                
+        logger.info("[Pipeline] Planning visuals for closing...")
+        plan_and_append(compilation_data["connective_tissue"]["closing"])
+        
+        for i, s in enumerate(shot_list):
+            s["scene_number"] = i + 1
+            
         logger.info("[Pipeline] Phase 5 (Visual Planner) complete. %d scenes planned.", len(shot_list))
 
         # ── Phase 6: Captions ──────────────────────────────────────
@@ -102,12 +116,6 @@ def run_pipeline(
         visual_director = VisualDirectorAgent(llm_client, channel_config)
         final_scenes = visual_director.select_visuals(shot_list, words_timing)
         
-        # ── Phase 5.6: Punch-Editing System ────────────────────────
-        from src.agents.punch_agent import PunchAgent
-        punch_moments = PunchAgent().identify_punch_moments(script_text, words_timing, channel_config)
-        if punch_moments:
-            final_scenes = visual_director.insert_punch_cutaways(final_scenes, punch_moments, channel_config)
-        # We can store the JSON of the final scenes into the DB if we had a column, but we just pass it along
         video.status = "visuals_directed"
         db_session.commit()
         logger.info("[Pipeline] Phase 5.5 (Visual Director) complete. Final scenes aligned.")
@@ -122,9 +130,25 @@ def run_pipeline(
 
         # ── Phase 8: SEO ───────────────────────────────────────────
         from src.agents.seo_agent import SEOAgent
-        metadata = SEOAgent(llm_client, db_session).generate_metadata(script_text, topic_text, channel_config)
+        metadata = SEOAgent(llm_client, db_session).generate_metadata(script_text, primary_topic_text, channel_config)
         video.title = metadata.get("title", "")
-        video.description = metadata.get("description", "")
+        
+        # Generate chapters for description
+        chapters_text = "\n\nChapters:\n00:00 Cold Open\n"
+        story_idx = 1
+        for s in final_scenes:
+            # We look for markers we put in the final_script
+            if "--- STORY" in s.get("text_segment", ""):
+                start_s = int(s["start_time"])
+                mins, secs = divmod(start_s, 60)
+                chapters_text += f"{mins:02d}:{secs:02d} Story {story_idx}\n"
+                story_idx += 1
+            elif "--- CLOSING" in s.get("text_segment", ""):
+                start_s = int(s["start_time"])
+                mins, secs = divmod(start_s, 60)
+                chapters_text += f"{mins:02d}:{secs:02d} Final Thoughts\n"
+
+        video.description = metadata.get("description", "") + chapters_text
         video.tags_json = json.dumps(metadata.get("tags", []))
         
         # ── Phase 7: Thumbnail (Runs after SEO since it needs title) ──
@@ -146,7 +170,8 @@ def run_pipeline(
                     description=video.description,
                     tags=json.loads(video.tags_json) if video.tags_json else [],
                     thumbnail_path=video.thumbnail_path,
-                    publish_time_str=publish_time_str
+                    publish_time_str=publish_time_str,
+                    dry_run=dry_run
                 )
                 video.youtube_video_id = youtube_video_id
                 video.status = "uploaded"
@@ -173,7 +198,7 @@ def run_pipeline(
             logger.info("[Pipeline] Phase 8 (Upload) skipped due to dry_run=True.")
 
     except Exception as exc:
-        logger.error("[Pipeline] Pipeline failed for '%s': %s", topic_text, exc, exc_info=True)
+        logger.error("[Pipeline] Pipeline failed for '%s': %s", primary_topic_text, exc, exc_info=True)
         video.status = "failed"
         db_session.commit()
         result["status"] = "failed"
