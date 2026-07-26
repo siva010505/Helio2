@@ -101,33 +101,38 @@ class LongformResearchAgent:
             
         session = self.ShortsSession()
         try:
-            lookback = datetime.utcnow() - timedelta(days=30)
+            from sqlalchemy import text
+            query = text("""
+                SELECT 
+                    topics.topic_text, 
+                    videos.description, 
+                    performance_metrics.views, 
+                    performance_metrics.likes, 
+                    performance_metrics.average_view_percentage
+                FROM videos
+                JOIN performance_metrics ON videos.id = performance_metrics.video_id
+                JOIN topics ON videos.topic_id = topics.id
+                WHERE videos.upload_time >= datetime('now', '-30 days')
+                  AND videos.status = 'uploaded'
+                ORDER BY performance_metrics.views DESC
+                LIMIT 10
+            """)
             
-            # Query videos uploaded in last 30 days, sorted by views (or AVP)
-            results = (
-                session.query(Video, PerformanceMetric, Topic)
-                .join(PerformanceMetric, Video.id == PerformanceMetric.video_id)
-                .join(Topic, Video.topic_id == Topic.id)
-                .filter(Video.upload_time >= lookback)
-                .filter(Video.status == "uploaded")
-                .order_by(PerformanceMetric.views.desc())
-                .limit(10)
-                .all()
-            )
+            results = session.execute(query).fetchall()
             
             seeds = []
-            for video, metrics, topic in results:
+            for row in results:
                 seeds.append({
-                    "title": topic.topic_text,
-                    "description": video.description or "",
+                    "title": row.topic_text,
+                    "description": row.description or "",
                     "source": "shorts_seed",
                     "original_context": {
-                        "original_topic": topic.topic_text,
-                        "original_description": video.description,
+                        "original_topic": row.topic_text,
+                        "original_description": row.description,
                         "metrics": {
-                            "views": metrics.views,
-                            "likes": metrics.likes,
-                            "avp": metrics.average_view_percentage
+                            "views": row.views,
+                            "likes": row.likes,
+                            "avp": row.average_view_percentage
                         }
                     }
                 })
