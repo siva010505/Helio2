@@ -100,49 +100,58 @@ class AnalyticsAgent:
     # YouTube Analytics fetch
     # ------------------------------------------------------------------
 
-    def _fetch_metrics(self, youtube_analytics, video_id: str) -> Dict[str, Any]:
+    def _fetch_metrics(self, youtube_data, youtube_analytics, video_id: str) -> Dict[str, Any]:
         """
-        Fetches views, estimatedMinutesWatched, averageViewDuration, and
-        annotationClickThroughRate for a given YouTube video ID.
+        Fetches live views/likes/comments from Data API (0 delay), and 
+        retention metrics from Analytics API (which has a 48h delay).
         """
-        today = datetime.utcnow().strftime("%Y-%m-%d")
-        # Start from a wide enough window so we capture all-time stats
-        start_date = "2020-01-01"
-
-        response = (
-            youtube_analytics.reports()
-            .query(
-                ids="channel==MINE",
-                startDate=start_date,
-                endDate=today,
-                metrics=(
-                    "views,"
-                    "likes,"
-                    "comments,"
-                    "estimatedMinutesWatched,"
-                    "averageViewDuration,"
-                    "averageViewPercentage"
-                ),
-                dimensions="video",
-                filters=f"video=={video_id}",
-            )
-            .execute()
-        )
-
-        rows = response.get("rows", [])
-        if not rows:
-            logger.warning("[AnalyticsAgent] No data returned for video %s.", video_id)
+        # 1. Fetch live top-level stats from Data API
+        data_response = youtube_data.videos().list(
+            part="statistics",
+            id=video_id
+        ).execute()
+        items = data_response.get("items", [])
+        if not items:
+            logger.warning("[AnalyticsAgent] Video %s not found in Data API.", video_id)
             return {}
-
-        # rows[0]: [video_id, views, likes, comments, estMinsWatched, avgDuration, avgPct, ctr]
-        row = rows[0]
+        stats = items[0].get("statistics", {})
+        views = int(stats.get("viewCount", 0))
+        likes = int(stats.get("likeCount", 0))
+        comments = int(stats.get("commentCount", 0))
+        # 2. Fetch delayed retention stats from Analytics API
+        today = datetime.utcnow().strftime("%Y-%m-%d")
+        start_date = "2020-01-01"
+        
+        avg_duration = None
+        avg_pct = None
+        try:
+            analytics_response = (
+                youtube_analytics.reports()
+                .query(
+                    ids="channel==MINE",
+                    startDate=start_date,
+                    endDate=today,
+                    metrics="averageViewDuration,averageViewPercentage",
+                    dimensions="video",
+                    filters=f"video=={video_id}",
+                )
+                .execute()
+            )
+            rows = analytics_response.get("rows", [])
+            if rows:
+                avg_duration = float(rows[0][1])
+                avg_pct = float(rows[0][2])
+            else:
+                logger.info("[AnalyticsAgent] No retention data available yet for video %s.", video_id)
+        except Exception as e:
+            logger.warning("[AnalyticsAgent] Analytics API error for %s: %s", video_id, e)
         return {
-            "views": int(row[1]),
-            "likes": int(row[2]),
-            "comments": int(row[3]),
-            "average_view_duration": float(row[5]),
-            "average_view_percentage": float(row[6]),
-            "ctr": None,  # annotationClickThroughRate is deprecated/removed by YouTube
+            "views": views,
+            "likes": likes,
+            "comments": comments,
+            "average_view_duration": avg_duration,
+            "average_view_percentage": avg_pct,
+            "ctr": None,
         }
 
     # ------------------------------------------------------------------
@@ -169,6 +178,7 @@ class AnalyticsAgent:
             return []
 
         youtube_analytics = build("youtubeAnalytics", "v2", credentials=creds)
+        youtube_data = build("youtube", "v3", credentials=creds)
 
         results = []
         for video in videos:
@@ -179,7 +189,7 @@ class AnalyticsAgent:
                 (datetime.utcnow() - video.upload_time).total_seconds() / 3600,
             )
             try:
-                metrics = self._fetch_metrics(youtube_analytics, video.youtube_video_id)
+                metrics = self._fetch_metrics(youtube_data, youtube_analytics, video.youtube_video_id)
                 if not metrics:
                     continue
 
