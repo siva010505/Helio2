@@ -12,6 +12,21 @@ def init_db():
     print("Initializing SQLite database...")
     os.makedirs("data", exist_ok=True)
     Base.metadata.create_all(bind=engine)
+
+    # Safely migrate existing databases carried over from Helio 1
+    try:
+        from sqlalchemy import text
+        with engine.begin() as conn:
+            for col_sql in [
+                "ALTER TABLE topics ADD COLUMN source_context_json TEXT;",
+                "ALTER TABLE topics ADD COLUMN score_breakdown_json TEXT;",
+            ]:
+                try:
+                    conn.execute(text(col_sql))
+                except Exception:
+                    pass
+    except Exception:
+        pass
     print("Database initialization complete. Tables:")
     for table_name in Base.metadata.tables.keys():
         print(f"  [OK] {table_name}")
