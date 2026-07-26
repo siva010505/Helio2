@@ -79,8 +79,13 @@ jobs:
           # Ensure YouTube API uses the generated token file
           OAUTHLIB_INSECURE_TRANSPORT: "1" 
         run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ github.event.inputs.dry_run }}" = "true" ]; then
-            python scripts/run_daily_pipeline.py --dry-run
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            # Manual runs always bypass the 3-day interval check
+            if [ "${{ github.event.inputs.dry_run }}" = "true" ]; then
+              python scripts/run_daily_pipeline.py --dry-run --force
+            else
+              python scripts/run_daily_pipeline.py --force
+            fi
           else
             python scripts/run_daily_pipeline.py
           fi

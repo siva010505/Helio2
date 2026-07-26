@@ -51,12 +51,13 @@ class OrchestratorAgent:
     # Public API
     # ------------------------------------------------------------------
 
-    def run_daily_plan(self, dry_run: bool = False) -> dict:
+    def run_daily_plan(self, dry_run: bool = False, force: bool = False) -> dict:
         """
         Execute the full daily automation plan.
 
         Args:
             dry_run: If True, performs all steps except the final upload.
+            force: If True, ignores upload interval checks.
 
         Returns:
             Summary dict written to RunLog.
@@ -89,7 +90,7 @@ class OrchestratorAgent:
 
         try:
             for ch_cfg in self.config.get("channels", []):
-                ch_summary = self._run_channel(ch_cfg, dry_run=dry_run)
+                ch_summary = self._run_channel(ch_cfg, dry_run=dry_run, force=force)
                 summary["channels"].append(ch_summary)
 
             run_log.status = "success"
@@ -132,7 +133,7 @@ class OrchestratorAgent:
             self.db.commit()
         return channel
 
-    def _run_channel(self, ch_cfg: dict, dry_run: bool) -> dict:
+    def _run_channel(self, ch_cfg: dict, dry_run: bool, force: bool) -> dict:
         """Run research → scoring → pipeline for a single channel."""
         channel_name = ch_cfg.get("name", "unknown")
         stories_per_video = ch_cfg.get("long_form", {}).get("stories_per_video", 5)
@@ -154,7 +155,7 @@ class OrchestratorAgent:
         
         if last_video and last_video.upload_time:
             days_since = (datetime.utcnow() - last_video.upload_time).days
-            if days_since < interval_days and not dry_run:
+            if days_since < interval_days and not (dry_run or force):
                 msg = f"Skipping: only {days_since} days since last upload (interval is {interval_days})"
                 logger.info("[Orchestrator] %s", msg)
                 return {"channel": channel_name, "skipped": True, "reason": msg}

@@ -48,6 +48,11 @@ def main() -> None:
         help="Run all stages except the final YouTube upload.",
     )
     parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Force the run, ignoring upload interval checks.",
+    )
+    parser.add_argument(
         "--channel",
         default=None,
         help="Restrict run to a specific channel name (default: all).",
@@ -65,7 +70,7 @@ def main() -> None:
     logger = logging.getLogger("helio.runner")
 
     logger.info("=" * 60)
-    logger.info("Helio — Daily Pipeline Starting (dry_run=%s)", args.dry_run)
+    logger.info("Helio — Daily Pipeline Starting (dry_run=%s, force=%s)", args.dry_run, args.force)
     logger.info("=" * 60)
 
     # ── Initialise DB (idempotent) ────────────────────────────────────
@@ -96,7 +101,7 @@ def main() -> None:
     db = SessionLocal()
     try:
         orchestrator = OrchestratorAgent(config, db, llm_client=llm)
-        summary = orchestrator.run_daily_plan(dry_run=args.dry_run)
+        summary = orchestrator.run_daily_plan(dry_run=args.dry_run, force=args.force)
         logger.info("Daily plan summary: %s", summary)
     finally:
         db.close()
