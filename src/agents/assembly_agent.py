@@ -249,9 +249,7 @@ class AssemblyAgent:
                     color=self.accent_color,
                     stroke_color="black",
                     stroke_width=3,
-                    method="caption",
-                    size=(self.resolution[0] - 100, 250),
-                    text_align="center"
+                    method="label"
                 )
                 
                 txt_clip = txt_clip.with_position(("center", 1400))
@@ -325,7 +323,7 @@ class AssemblyAgent:
                 codec="libx264",
                 audio_codec="aac",
                 preset="ultrafast",
-                threads=4,
+                threads=1,
                 logger=None
             )
             logger.info("[AssemblyAgent] Export successful!")
