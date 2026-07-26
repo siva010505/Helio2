@@ -88,7 +88,7 @@ class EvaluationAgent:
                 Video.upload_time <= cutoff,
             )
             .order_by(PerformanceMetric.pulled_at.desc())
-            .limit(50)   # cap context size for LLM
+            .limit(30)   # cap context size for LLM
             .all()
         )
 
