@@ -267,6 +267,21 @@ class AssemblyAgent:
             except Exception as exc:
                 logger.warning("Failed to load BGM: %s", exc)
                 
+        swoosh_path = "assets/music/swoosh.wav"
+        if os.path.exists(swoosh_path):
+            is_first_story = True
+            for scene in final_scenes:
+                text_seg = scene.get("text_segment", "")
+                if "--- STORY" in text_seg:
+                    if is_first_story:
+                        is_first_story = False
+                    else:
+                        try:
+                            swoosh = AudioFileClip(swoosh_path).with_start(scene["start_time"])
+                            audio_clips.append(swoosh)
+                        except Exception as e:
+                            logger.warning("Failed to load swoosh: %s", e)
+
         final_audio = CompositeAudioClip(audio_clips)
         main_video = main_video.with_audio(final_audio)
         
@@ -444,7 +459,17 @@ class AssemblyAgent:
 
         main_video = CompositeVideoClip(final_clips)
             
-        # Thumbnail baking is removed for long-form.
+        # Check for intro video and prepend if exists
+        intro_vid_path = "assets/video/intro.mp4"
+        if os.path.exists(intro_vid_path):
+            try:
+                from moviepy import VideoFileClip, concatenate_videoclips
+                intro_clip = VideoFileClip(intro_vid_path)
+                intro_clip = self._resize_and_crop(intro_clip, self.resolution)
+                main_video = concatenate_videoclips([intro_clip, main_video])
+                logger.info("[AssemblyAgent] Pre-pended custom intro video from %s", intro_vid_path)
+            except Exception as e:
+                logger.warning("Failed to prepend intro video: %s", e)
 
         output_path = self.cache_dir / f"final_video_{video_id}.mp4"
         logger.info("[AssemblyAgent] Exporting final video to %s", output_path)
