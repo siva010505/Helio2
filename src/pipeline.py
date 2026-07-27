@@ -153,7 +153,7 @@ def run_pipeline(
         
         # ── Phase 7: Thumbnail (Runs after SEO since it needs title) ──
         from src.agents.thumbnail_agent import ThumbnailAgent
-        thumbnail_path = ThumbnailAgent(channel_config).generate_thumbnail(video_path, video.title, video.id)
+        thumbnail_path = ThumbnailAgent(channel_config, llm_client).generate_thumbnail(video_path, video.title, video.id)
         video.thumbnail_path = thumbnail_path
 
         video.status = "metadata_ready"
