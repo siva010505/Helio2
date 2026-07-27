@@ -170,13 +170,23 @@ class AssemblyAgent:
         
         logger.info("[AssemblyAgent] Starting video assembly for video %s", video_id)
         
-        scene_clips = []
-        for scene in final_scenes:
+        # We will render each scene individually to prevent 76+ open FFMPEG processes from causing OOM
+        scene_files = []
+        import subprocess
+        import tempfile
+        
+        # Create a temp directory for scene chunks
+        scenes_dir = self.cache_dir / f"scenes_{video_id}"
+        scenes_dir.mkdir(parents=True, exist_ok=True)
+        
+        logger.info("[AssemblyAgent] Pre-rendering %d scenes to prevent memory leaks...", len(final_scenes))
+        for idx, scene in enumerate(final_scenes):
             duration = scene["end_time"] - scene["start_time"]
             if duration <= 0:
                 continue
                 
             flashes = scene.get("zoom_flash_at", [])
+            scene_output = str(scenes_dir / f"scene_{idx:03d}.mp4")
                 
             try:
                 path = scene["video_path"]
@@ -184,8 +194,7 @@ class AssemblyAgent:
                     clip = ImageClip(path).with_duration(duration)
                     clip = self._apply_ken_burns(clip, duration, secondary_flashes=flashes)
                 else:
-                    clip = VideoFileClip(path)
-                    clip = clip.without_audio() # Priority 1: Strip audio
+                    clip = VideoFileClip(path, audio=False)
                     clip = self._resize_and_crop(clip, self.resolution)
                     
                     if clip.duration < duration:
@@ -195,15 +204,43 @@ class AssemblyAgent:
                         
                     clip = self._apply_zoom_flashes(clip, duration, flashes)
                     
-                scene_clips.append(clip)
+                clip.write_videofile(
+                    scene_output,
+                    fps=24,
+                    codec="libx264",
+                    preset="ultrafast",
+                    threads=1,
+                    logger=None,
+                    audio=False
+                )
+                clip.close()
+                scene_files.append(scene_output)
             except Exception as exc:
                 logger.error("Failed to process clip for scene %s: %s", scene.get("scene_number"), exc)
                 from moviepy import ColorClip
                 fallback = ColorClip(size=self.resolution, color=(0,0,0), duration=duration)
-                scene_clips.append(fallback)
+                fallback.write_videofile(
+                    scene_output, fps=24, codec="libx264", preset="ultrafast", threads=1, logger=None, audio=False
+                )
+                fallback.close()
+                scene_files.append(scene_output)
                 
-        logger.info("[AssemblyAgent] Concatenating %d scenes.", len(scene_clips))
-        main_video = concatenate_videoclips(scene_clips, method="compose")
+        logger.info("[AssemblyAgent] Using ffmpeg concat demuxer to instantly combine %d scenes...", len(scene_files))
+        concat_txt = scenes_dir / "concat.txt"
+        with open(concat_txt, "w") as f:
+            for sf in scene_files:
+                f.write(f"file '{Path(sf).resolve().as_posix()}'\n")
+                
+        combined_bg_path = str(self.cache_dir / f"combined_bg_{video_id}.mp4")
+        subprocess.run([
+            "ffmpeg", "-y", "-f", "concat", "-safe", "0", 
+            "-i", str(concat_txt), 
+            "-c", "copy", 
+            combined_bg_path
+        ], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        
+        logger.info("[AssemblyAgent] Loading the optimized combined background track.")
+        main_video = VideoFileClip(combined_bg_path, audio=False)
         
         logger.info("[AssemblyAgent] Adding voice audio from %s", voice_path)
         voice_clip = AudioFileClip(voice_path)
