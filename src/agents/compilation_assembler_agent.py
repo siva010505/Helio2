@@ -15,14 +15,24 @@ from src.agents.script_agent import ScriptAgent
 logger = logging.getLogger(__name__)
 
 COMPILATION_PROMPT = """\
-You are an expert YouTube compilation writer. You are provided with a list of generated mini-stories.
+You are an expert YouTube compilation writer. You are provided with a list of topics with their generated scripts.
 Your task is to write the connective tissue that weaves them into a single cohesive long-form video.
 
+CRITICAL RULE — Content Labels:
+First, analyse EACH topic carefully. Then label it with the most fitting word:
+- Use "Story" only if it is a real historical event or incident with a narrative arc.
+- Use "Fact" if it is a surprising psychological or scientific truth.
+- Use "Trick" if it is a mental hack, influence technique, or social engineering tactic.
+- Use "Case" if it is a documented medical, legal, or investigative case.
+- Use "Secret" if it is a hidden truth or suppressed knowledge.
+- Use "Experiment" if it is a famous psychological or scientific experiment.
+
 You must write:
-1. Cold Open (15-25 seconds): Preview all the stories to hook the viewer. Save the strongest story for last ("...and story #X is the one investigators still can't explain"). Do not include channel intro here.
-2. Bridge Lines: For each transition between consecutive stories, write 1-2 sentences that close the previous story's loop and open the next one.
-3. Closing Recap + CTA (20-30 seconds): A brief recap, ask to subscribe, and a pointer back to related Shorts.
-4. Chapter Titles: Generate a highly engaging 2-3 word title for each story (e.g. "THE DANCING PLAGUE" or "THE MIRROR TRICK").
+1. Cold Open (15-25 seconds): Preview all the topics using their CORRECT label (e.g. "the Fact that will rewire your brain" or "the Case investigators still can't explain"). Do NOT use channel intro here.
+2. Bridge Lines: For each transition between consecutive topics, write 1-2 sentences that close the previous topic and tease the next one. Use the correct label for each topic.
+3. Closing Recap + CTA (20-30 seconds): A brief recap using the correct labels, ask to subscribe, and a pointer back to related Shorts.
+4. Chapter Titles: Generate a highly engaging 2-3 word title for each topic (e.g. "THE DANCING PLAGUE" or "THE MIRROR TRICK" or "THE DEAD MAN CASE").
+5. Content Labels: Return the detected label for each topic in order (e.g. ["Story", "Fact", "Trick"]).
 
 Topics and their generated scripts:
 {stories_json}
@@ -32,7 +42,8 @@ The output MUST be a JSON object containing:
   "cold_open": "Cold open script...",
   "bridges": ["Bridge from 1 to 2", "Bridge from 2 to 3", "..."],
   "closing": "Closing script...",
-  "chapter_titles": ["Title 1", "Title 2"]
+  "chapter_titles": ["Title 1", "Title 2"],
+  "content_labels": ["Story", "Fact", "Trick"]
 }}
 """
 

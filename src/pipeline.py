@@ -90,8 +90,19 @@ def run_pipeline(
         logger.info("[Pipeline] Planning visuals for cold open...")
         plan_and_append(compilation_data["connective_tissue"]["cold_open"])
         
+        # Track the start indices and titles for each story
+        story_starts = []
+        chapter_titles = compilation_data["connective_tissue"].get("chapter_titles", [])
+        content_labels = compilation_data["connective_tissue"].get("content_labels", [])
+        
         for i, story in enumerate(compilation_data["stories"]):
             logger.info("[Pipeline] Planning visuals for story %d...", i+1)
+            # Record the index of the first scene of this story
+            story_starts.append({
+                "scene_idx": len(shot_list),
+                "title": chapter_titles[i] if i < len(chapter_titles) else f"Story {i+1}",
+                "label": content_labels[i] if i < len(content_labels) else "Story"
+            })
             plan_and_append(story["script"])
             if i < len(compilation_data["stories"]) - 1:
                 bridges = compilation_data["connective_tissue"].get("bridges", [])
@@ -99,10 +110,18 @@ def run_pipeline(
                 plan_and_append(bridge)
                 
         logger.info("[Pipeline] Planning visuals for closing...")
+        closing_scene_idx = len(shot_list)
         plan_and_append(compilation_data["connective_tissue"]["closing"])
         
         for i, s in enumerate(shot_list):
             s["scene_number"] = i + 1
+            # Inject chapter markers directly into the correct scene
+            for start_data in story_starts:
+                if start_data["scene_idx"] == i:
+                    s["chapter_title"] = start_data["title"]
+                    s["content_label"] = start_data["label"]
+            if i == closing_scene_idx:
+                s["is_closing"] = True
             
         logger.info("[Pipeline] Phase 5 (Visual Planner) complete. %d scenes planned.", len(shot_list))
 
@@ -135,25 +154,12 @@ def run_pipeline(
         
         # Generate chapters for description
         chapters_text = "\n\nChapters:\n00:00 Cold Open\n"
-        story_idx = 1
         for s in final_scenes:
-            # We look for markers we put in the final_script
-            text_seg = s.get("text_segment", "")
-            if "--- STORY" in text_seg:
+            if "chapter_title" in s:
                 start_s = int(s["start_time"])
                 mins, secs = divmod(start_s, 60)
-                
-                # Try to extract the custom title (e.g., "--- STORY 1: THE DANCING PLAGUE ---")
-                import re
-                match = re.search(r"--- STORY \d+:\s*(.*?) ---", text_seg)
-                if match:
-                    title = match.group(1).title()
-                    chapters_text += f"{mins:02d}:{secs:02d} {title}\n"
-                else:
-                    chapters_text += f"{mins:02d}:{secs:02d} Story {story_idx}\n"
-                    
-                story_idx += 1
-            elif "--- CLOSING" in text_seg:
+                chapters_text += f"{mins:02d}:{secs:02d} {s['chapter_title'].title()}\n"
+            elif s.get("is_closing"):
                 start_s = int(s["start_time"])
                 mins, secs = divmod(start_s, 60)
                 chapters_text += f"{mins:02d}:{secs:02d} Final Thoughts\n"
