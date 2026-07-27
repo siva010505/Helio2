@@ -138,12 +138,22 @@ def run_pipeline(
         story_idx = 1
         for s in final_scenes:
             # We look for markers we put in the final_script
-            if "--- STORY" in s.get("text_segment", ""):
+            text_seg = s.get("text_segment", "")
+            if "--- STORY" in text_seg:
                 start_s = int(s["start_time"])
                 mins, secs = divmod(start_s, 60)
-                chapters_text += f"{mins:02d}:{secs:02d} Story {story_idx}\n"
+                
+                # Try to extract the custom title (e.g., "--- STORY 1: THE DANCING PLAGUE ---")
+                import re
+                match = re.search(r"--- STORY \d+:\s*(.*?) ---", text_seg)
+                if match:
+                    title = match.group(1).title()
+                    chapters_text += f"{mins:02d}:{secs:02d} {title}\n"
+                else:
+                    chapters_text += f"{mins:02d}:{secs:02d} Story {story_idx}\n"
+                    
                 story_idx += 1
-            elif "--- CLOSING" in s.get("text_segment", ""):
+            elif "--- CLOSING" in text_seg:
                 start_s = int(s["start_time"])
                 mins, secs = divmod(start_s, 60)
                 chapters_text += f"{mins:02d}:{secs:02d} Final Thoughts\n"

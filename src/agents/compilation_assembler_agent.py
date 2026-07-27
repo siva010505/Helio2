@@ -22,6 +22,7 @@ You must write:
 1. Cold Open (15-25 seconds): Preview all the stories to hook the viewer. Save the strongest story for last ("...and story #X is the one investigators still can't explain"). Do not include channel intro here.
 2. Bridge Lines: For each transition between consecutive stories, write 1-2 sentences that close the previous story's loop and open the next one.
 3. Closing Recap + CTA (20-30 seconds): A brief recap, ask to subscribe, and a pointer back to related Shorts.
+4. Chapter Titles: Generate a highly engaging 2-3 word title for each story (e.g. "THE DANCING PLAGUE" or "THE MIRROR TRICK").
 
 Topics and their generated scripts:
 {stories_json}
@@ -30,7 +31,8 @@ The output MUST be a JSON object containing:
 {{
   "cold_open": "Cold open script...",
   "bridges": ["Bridge from 1 to 2", "Bridge from 2 to 3", "..."],
-  "closing": "Closing script..."
+  "closing": "Closing script...",
+  "chapter_titles": ["Title 1", "Title 2"]
 }}
 """
 
@@ -70,8 +72,11 @@ class CompilationAssemblerAgent:
 
         # Assemble final script
         final_script = connective_tissue.get("cold_open", "") + "\n\n"
+        chapter_titles = connective_tissue.get("chapter_titles", [])
+        
         for i, story in enumerate(stories):
-            final_script += f"--- STORY {i+1} ---\n"
+            title = chapter_titles[i] if i < len(chapter_titles) else f"STORY {i+1}"
+            final_script += f"--- STORY {i+1}: {title} ---\n"
             final_script += story["script"] + "\n\n"
             
             if i < len(stories) - 1:

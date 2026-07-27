@@ -457,6 +457,60 @@ class AssemblyAgent:
             except Exception as e:
                 logger.warning("Failed to add watermark: %s", e)
 
+        # Generate Chapter Titles
+        import re
+        from PIL import Image, ImageDraw, ImageFont
+        
+        for scene in final_scenes:
+            text_seg = scene.get("text_segment", "")
+            if "--- STORY" in text_seg:
+                match = re.search(r"--- STORY \d+:\s*(.*?) ---", text_seg)
+                if match:
+                    title = match.group(1).strip().upper()
+                    if title:
+                        try:
+                            # Use PIL to draw the graphic
+                            font_size = 55
+                            try:
+                                c_font = ImageFont.truetype(self.font, font_size)
+                            except:
+                                c_font = ImageFont.load_default()
+                                
+                            # Calculate text size
+                            if hasattr(c_font, 'getbbox'):
+                                bbox = c_font.getbbox(title)
+                                text_w = bbox[2] - bbox[0]
+                                text_h = bbox[3] - bbox[1]
+                            else:
+                                text_w, text_h = c_font.getsize(title)
+                                
+                            padding_x, padding_y = 40, 20
+                            img_w, img_h = text_w + padding_x * 2, text_h + padding_y * 2
+                            
+                            img = Image.new('RGBA', (img_w, img_h), (0, 0, 0, 0))
+                            draw = ImageDraw.Draw(img)
+                            
+                            # Draw solid red background box
+                            draw.rectangle([(0, 0), (img_w, img_h)], fill=(200, 0, 0, 255))
+                            
+                            # Draw white text
+                            draw.text((padding_x, padding_y - 10), title, font=c_font, fill=(255, 255, 255, 255))
+                            
+                            chapter_img_path = str(self.cache_dir / f"chapter_{scene['start_time']}.png")
+                            img.save(chapter_img_path)
+                            
+                            chapter_clip = ImageClip(chapter_img_path).with_start(scene["start_time"]).with_duration(2.5)
+                            
+                            if hasattr(chapter_clip, "with_position"):
+                                chapter_clip = chapter_clip.with_position((100, 100))
+                            else:
+                                chapter_clip = chapter_clip.set_position((100, 100))
+                                
+                            final_clips.append(chapter_clip)
+                            logger.info(f"[AssemblyAgent] Added chapter title '{title}' at {scene['start_time']}")
+                        except Exception as e:
+                            logger.error(f"[AssemblyAgent] Failed to draw chapter title: {e}")
+
         main_video = CompositeVideoClip(final_clips)
             
         # Check for intro video and prepend if exists
