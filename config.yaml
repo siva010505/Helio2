@@ -58,8 +58,8 @@ learning:
   metrics_pulled: ["views", "likes", "comments", "average_view_duration", "average_view_percentage"]
 
 long_form:
-  target_total_length_seconds: 60
-  stories_per_video: 1
+  target_total_length_seconds: 120
+  stories_per_video: 2
   resolution: "1920x1080"
   scene_target_seconds: 15
   thumbnail_candidates: 4
