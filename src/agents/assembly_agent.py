@@ -271,9 +271,8 @@ class AssemblyAgent:
         final_audio = CompositeAudioClip(audio_clips)
         main_video = main_video.with_audio(final_audio)
         
-        logger.info("[AssemblyAgent] Generating caption overlays via PIL Karaoke Accumulator...")
-        caption_clips = []
-        
+        logger.info("[AssemblyAgent] Generating caption overlays via PIL Karaoke Accumulator (Zero-Overhead Mode)...")
+        caption_timeline = []        
         caption_cache_dir = self.cache_dir / "captions"
         caption_cache_dir.mkdir(exist_ok=True)
         
@@ -389,15 +388,39 @@ class AssemblyAgent:
                 # Optimize memory for 10-minute videos by saving to disk instead of holding 1500 numpy arrays
                 img_path = caption_cache_dir / f"caption_{i}_{j}.png"
                 img.save(img_path, format="PNG", optimize=False)
-                
-                clip = ImageClip(str(img_path)).with_start(target_word["timing"]["start"]).with_end(target_word["timing"]["end"])
-                caption_clips.append(clip)
+                caption_timeline.append((target_word["timing"]["start"], target_word["timing"]["end"], str(img_path)))
 
-        if caption_clips:
-            logger.info("[AssemblyAgent] Compositing %d caption clips.", len(caption_clips))
+        if caption_timeline:
+            logger.info("[AssemblyAgent] Applying zero-overhead caption filter to %d caption frames.", len(caption_timeline))
             
-        final_clips = [main_video] + caption_clips
-        
+            # Use a state dictionary to avoid nonlocal keyword limitations across multiple frames
+            state = {"last_path": None, "last_img": None}
+            
+            def apply_caption(get_frame, t):
+                frame = get_frame(t)
+                
+                active_path = None
+                for start_t, end_t, path in caption_timeline:
+                    if start_t <= t <= end_t:
+                        active_path = path
+                        break
+                        
+                if not active_path:
+                    return frame
+                    
+                if active_path != state["last_path"]:
+                    state["last_path"] = active_path
+                    state["last_img"] = np.array(Image.open(active_path))
+                    
+                # Fast vectorized alpha compositing
+                overlay = state["last_img"]
+                alpha = overlay[:, :, 3:4] / 255.0
+                frame = frame * (1 - alpha) + overlay[:, :, :3] * alpha
+                return frame.astype(np.uint8)
+                
+            main_video = main_video.fl(apply_caption)
+            
+        final_clips = [main_video]
         if self.logo_path and os.path.exists(self.logo_path):
             try:
                 from moviepy import ImageClip
