@@ -270,33 +270,122 @@ class AssemblyAgent:
         final_audio = CompositeAudioClip(audio_clips)
         main_video = main_video.with_audio(final_audio)
         
-        logger.info("[AssemblyAgent] Generating caption overlays...")
+        logger.info("[AssemblyAgent] Generating caption overlays via PIL Karaoke Accumulator...")
         caption_clips = []
         
-        for word in words_timing:
-            w_text = word["word"].strip()
-            if not w_text:
-                continue
+        from PIL import Image, ImageDraw, ImageFont
+        import numpy as np
+        from moviepy import ImageClip
+        
+        # Load font
+        try:
+            font = ImageFont.truetype(self.font, 80)
+        except IOError:
+            logger.warning("Could not load trutype font %s. Falling back to default.", self.font)
+            font = ImageFont.load_default()
+            
+        CHUNK_SIZE = 12
+        MAX_LINE_WIDTH = 1600
+        W, H = self.resolution
+        
+        # Robust width calculation
+        def get_text_width(text, font):
+            if hasattr(font, 'getlength'):
+                return int(font.getlength(text))
+            elif hasattr(font, 'getbbox'):
+                return font.getbbox(text)[2]
+            else:
+                return font.getsize(text)[0]
                 
-            try:
-                txt_clip = TextClip(
-                    text=w_text,
-                    font=self.font,
-                    font_size=80,
-                    color=self.accent_color,
-                    stroke_color="black",
-                    stroke_width=3,
-                    method="label"
-                )
+        # Fix vertical jumping by using a reference string for consistent line height
+        if hasattr(font, 'getbbox'):
+            ref_h = font.getbbox("Ay")[3]
+        elif hasattr(ImageDraw.Draw(Image.new("RGB", (1,1))), 'textbbox'):
+            bbox = ImageDraw.Draw(Image.new("RGB", (1,1))).textbbox((0,0), "Ay", font=font)
+            ref_h = bbox[3] - bbox[1]
+        else:
+            _, ref_h = font.getsize("Ay")
+            
+        space_w = get_text_width(" ", font)
+        valid_words = [w for w in words_timing if w["word"].strip()]
+        
+        for i in range(0, len(valid_words), CHUNK_SIZE):
+            chunk = valid_words[i:i+CHUNK_SIZE]
+            
+            # 1. Pre-calculate layout
+            lines = []
+            current_line = []
+            current_w = 0
+            
+            for w in chunk:
+                text = w["word"].strip()
+                ww = get_text_width(text, font)
                 
-                # Position it 75% down the screen so it avoids YouTube Studio preview cropping
-                y_pos = int(self.resolution[1] * 0.75)
-                txt_clip = txt_clip.with_position(("center", y_pos))
-                txt_clip = txt_clip.with_start(word["start"]).with_end(word["end"])
+                if current_line and (current_w + space_w + ww > MAX_LINE_WIDTH):
+                    lines.append(current_line)
+                    current_line = []
+                    current_w = 0
+                    
+                current_line.append({"text": text, "width": ww, "timing": w})
+                if len(current_line) == 1:
+                    current_w += ww
+                else:
+                    current_w += space_w + ww
+            
+            if current_line:
+                lines.append(current_line)
                 
-                caption_clips.append(txt_clip)
-            except Exception as exc:
-                logger.warning("Failed to create caption for word '%s': %s", w_text, exc)
+            line_spacing = 20
+            total_h = (len(lines) * ref_h) + (len(lines) - 1) * line_spacing
+            
+            # Target bottom 85% of screen
+            target_y_center = int(H * 0.85)
+            block_y = target_y_center - (total_h // 2)
+            
+            word_layouts = []
+            current_y = block_y
+            
+            for line in lines:
+                line_w = sum([w["width"] for w in line]) + (len(line) - 1) * space_w
+                start_x = (W - line_w) // 2
+                current_x = start_x
+                
+                for w in line:
+                    word_layouts.append({
+                        "text": w["text"],
+                        "x": current_x,
+                        "y": current_y,
+                        "timing": w["timing"]
+                    })
+                    current_x += w["width"] + space_w
+                    
+                current_y += ref_h + line_spacing
+                
+            # 2. Accumulator Rendering
+            for j in range(len(word_layouts)):
+                target_word = word_layouts[j]
+                
+                img = Image.new('RGBA', (W, H), (0, 0, 0, 0))
+                draw = ImageDraw.Draw(img)
+                
+                for k in range(j + 1):
+                    w_info = word_layouts[k]
+                    text = w_info["text"]
+                    x, y = w_info["x"], w_info["y"]
+                    
+                    color = self.accent_color if k == j else "white"
+                    
+                    stroke = 4
+                    for dx in range(-stroke, stroke+1, 2):
+                        for dy in range(-stroke, stroke+1, 2):
+                            draw.text((x+dx, y+dy), text, font=font, fill="black")
+                            
+                    draw.text((x, y), text, font=font, fill=color)
+                    
+                # In moviepy v2, ImageClip uses numpy arrays
+                np_img = np.array(img)
+                clip = ImageClip(np_img).with_start(target_word["timing"]["start"]).with_end(target_word["timing"]["end"])
+                caption_clips.append(clip)
 
         if caption_clips:
             logger.info("[AssemblyAgent] Compositing %d caption clips.", len(caption_clips))
