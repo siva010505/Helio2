@@ -167,6 +167,18 @@ class UploadAgent:
         video_id = response.get('id')
         logger.info("[UploadAgent] Video uploaded successfully! Video ID: %s", video_id)
         
+        # Upload Thumbnail if provided
+        if thumbnail_path and os.path.exists(thumbnail_path):
+            logger.info("[UploadAgent] Uploading custom thumbnail from '%s'...", thumbnail_path)
+            try:
+                youtube.thumbnails().set(
+                    videoId=video_id,
+                    media_body=MediaFileUpload(thumbnail_path, mimetype='image/jpeg')
+                ).execute()
+                logger.info("[UploadAgent] Successfully uploaded custom thumbnail!")
+            except Exception as e:
+                logger.warning("[UploadAgent] Failed to upload custom thumbnail: %s", e)
+        
         # Write shared pointer file
         try:
             shared_file = Path("latest_long_form.json")
