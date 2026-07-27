@@ -324,7 +324,7 @@ class AssemblyAgent:
                 audio_codec="aac",
                 preset="ultrafast",
                 threads=1,
-                logger=None
+                logger="bar"
             )
             logger.info("[AssemblyAgent] Export successful!")
         except Exception as exc:
