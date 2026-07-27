@@ -284,7 +284,7 @@ class AssemblyAgent:
             logger.warning("Could not load trutype font %s. Falling back to default.", self.font)
             font = ImageFont.load_default()
             
-        CHUNK_SIZE = 12
+        CHUNK_SIZE = 8
         MAX_LINE_WIDTH = 1600
         W, H = self.resolution
         
@@ -368,7 +368,7 @@ class AssemblyAgent:
                 img = Image.new('RGBA', (W, H), (0, 0, 0, 0))
                 draw = ImageDraw.Draw(img)
                 
-                for k in range(j + 1):
+                for k in range(len(word_layouts)):
                     w_info = word_layouts[k]
                     text = w_info["text"]
                     x, y = w_info["x"], w_info["y"]
