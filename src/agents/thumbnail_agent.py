@@ -65,50 +65,89 @@ class ThumbnailAgent:
             except IOError:
                 font = ImageFont.load_default()
 
-            # Ask the LLM for a massive clickbait hook!
-            hook_prompt = f"Write a 3-word clickbait hook for a video titled '{title}'. No quotes, no emojis, just the 3 words."
+            # Ask the LLM for a 2-part documentary style hook!
+            hook_prompt = f"""You are a top-tier YouTube thumbnail designer (like DOAC).
+For the video title: '{title}'
+Create a 2-part clickbait text hook.
+Part 1 should be intriguing (e.g. "they danced to" or "seeing true reality").
+Part 2 MUST BE A SINGLE, SHOCKING WORD that will be highlighted in a red box (e.g. "DEATH" or "KILL US").
+Keep it extremely short. No emojis.
+Respond ONLY with a JSON object: {{"line1": "...", "highlight_word": "..."}}"""
             try:
-                clickbait_text = self.llm_client.generate_text("You are an expert YouTube thumbnail designer.", hook_prompt, max_tokens=15).strip().upper()
-                clickbait_text = clickbait_text.replace('"', '').replace("'", "")
+                resp = self.llm_client.generate_json("You are an expert thumbnail designer.", hook_prompt)
+                line1_text = resp.get("line1", "").strip().lower()
+                highlighted_text = resp.get("highlight_word", "").strip().upper()
+                if not line1_text or not highlighted_text:
+                    raise ValueError("Missing keys")
             except Exception as e:
-                logger.warning("Failed to generate hook, falling back to title: %s", e)
-                clickbait_text = " ".join(title.split()[:3]).upper()
-
-            wrapped_text = textwrap.fill(clickbait_text, width=12)
+                logger.warning("Failed to generate hook JSON, falling back: %s", e)
+                line1_text = "the secret of"
+                highlighted_text = "THE VIDEO"
 
             for i, t in enumerate(timestamps):
                 frame = clip.get_frame(t)
                 img = Image.fromarray(frame).convert("RGBA")
+                
+                # Subtle color grading (documentary style)
+                from PIL import ImageEnhance
+                enhancer = ImageEnhance.Contrast(img)
+                img = enhancer.enhance(1.15)
+                enhancer = ImageEnhance.Color(img)
+                img = enhancer.enhance(1.2)
+                
                 W, H = img.size
                 
-                # 1. Dramatic dark gradient overlay from the bottom up to make text POP
-                gradient = Image.new('RGBA', (W, H), (0, 0, 0, 0))
-                draw_grad = ImageDraw.Draw(gradient)
-                for gy in range(int(H * 0.4), H):
-                    alpha = int(255 * ((gy - H * 0.4) / (H * 0.6)))
-                    draw_grad.line([(0, gy), (W, gy)], fill=(0, 0, 0, alpha))
+                # Add a soft vignette (darkened edges) to focus attention
+                vignette = Image.new('RGBA', (W, H), (0, 0, 0, 0))
+                v_draw = ImageDraw.Draw(vignette)
+                for gy in range(300):
+                    alpha = int(255 * ((300 - gy) / 300) * 0.7)
+                    v_draw.rectangle([gy, gy, W - gy, H - gy], outline=(0, 0, 0, alpha))
+                img = Image.alpha_composite(img, vignette)
                 
-                img = Image.alpha_composite(img, gradient)
                 draw = ImageDraw.Draw(img)
                 
-                # 2. Draw text centered near the bottom
-                bbox = draw.textbbox((0, 0), wrapped_text, font=font)
-                w, h = bbox[2] - bbox[0], bbox[3] - bbox[1]
+                # Function to get exact text height
+                def get_text_dimensions(text, font):
+                    bbox = draw.textbbox((0, 0), text, font=font)
+                    return bbox[2] - bbox[0], bbox[3] - bbox[1], bbox[1]
+                    
+                w1, h1, offset1 = get_text_dimensions(line1_text, font)
+                w2, h2, offset2 = get_text_dimensions(highlighted_text, font)
                 
-                x = (W - w) // 2
-                y = H - h - 120
+                margin = 20 # space between lines
+                pad_x = 50
+                pad_y = 20
                 
-                # 3. Draw massive drop shadow
-                draw.text((x + 15, y + 15), wrapped_text, font=font, fill="black")
+                box_w = w2 + (pad_x * 2)
+                box_h = h2 + (pad_y * 2)
                 
-                # 4. Draw thick stroke for extreme readability
-                outline_range = 10
-                for dx in range(-outline_range, outline_range+1, 2):
-                    for dy in range(-outline_range, outline_range+1, 2):
-                        draw.text((x+dx, y+dy), wrapped_text, font=font, fill="black")
+                total_h = h1 + margin + box_h
                 
-                # 5. Draw main text in bright accent color
-                draw.text((x, y), wrapped_text, font=font, fill=self.accent_color)
+                # Position at bottom center
+                start_y = H - total_h - 100
+                
+                # Line 1
+                x1 = (W - w1) // 2
+                y1 = start_y
+                
+                # Drop shadow for line 1
+                draw.text((x1+8, y1+8 - offset1), line1_text, font=font, fill=(0,0,0, 200))
+                draw.text((x1, y1 - offset1), line1_text, font=font, fill="white")
+                
+                # Line 2 (Red Highlight Box)
+                x2 = (W - box_w) // 2
+                y2 = y1 + h1 + margin
+                
+                # Box Drop Shadow
+                draw.rectangle([x2+10, y2+10, x2+box_w+10, y2+box_h+10], fill=(0,0,0,150))
+                # Red Box
+                draw.rectangle([x2, y2, x2+box_w, y2+box_h], fill="#D90000")
+                
+                # Text inside box
+                text_x = x2 + pad_x
+                text_y = y2 + pad_y - offset2
+                draw.text((text_x, text_y), highlighted_text, font=font, fill="white")
                 
                 img = img.convert("RGB")
                 
