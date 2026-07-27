@@ -288,8 +288,8 @@ class AssemblyAgent:
             logger.warning("Could not load trutype font %s. Falling back to default.", self.font)
             font = ImageFont.load_default()
             
-        CHUNK_SIZE = 6
-        MAX_LINE_WIDTH = 1200
+        CHUNK_SIZE = 8
+        MAX_LINE_WIDTH = 1400
         W, H = self.resolution
         
         # Robust width calculation
