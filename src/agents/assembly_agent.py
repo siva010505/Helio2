@@ -273,6 +273,9 @@ class AssemblyAgent:
         logger.info("[AssemblyAgent] Generating caption overlays via PIL Karaoke Accumulator...")
         caption_clips = []
         
+        caption_cache_dir = self.cache_dir / "captions"
+        caption_cache_dir.mkdir(exist_ok=True)
+        
         from PIL import Image, ImageDraw, ImageFont
         import numpy as np
         from moviepy import ImageClip
@@ -382,9 +385,11 @@ class AssemblyAgent:
                             
                     draw.text((x, y), text, font=font, fill=color)
                     
-                # In moviepy v2, ImageClip uses numpy arrays
-                np_img = np.array(img)
-                clip = ImageClip(np_img).with_start(target_word["timing"]["start"]).with_end(target_word["timing"]["end"])
+                # Optimize memory for 10-minute videos by saving to disk instead of holding 1500 numpy arrays
+                img_path = caption_cache_dir / f"caption_{i}_{j}.png"
+                img.save(img_path, format="PNG", optimize=False)
+                
+                clip = ImageClip(str(img_path)).with_start(target_word["timing"]["start"]).with_end(target_word["timing"]["end"])
                 caption_clips.append(clip)
 
         if caption_clips:
