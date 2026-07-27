@@ -450,8 +450,7 @@ class AssemblyAgent:
         for scene in final_scenes:
             if "chapter_title" in scene:
                 title = scene["chapter_title"].strip().upper()
-                label = scene.get("content_label", "STORY").strip().upper()
-                display_text = f"{label} {story_idx}: {title}"
+                display_text = f"{story_idx}: {title}"
                 story_idx += 1
                 
                 try:
