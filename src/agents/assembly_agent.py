@@ -422,24 +422,6 @@ class AssemblyAgent:
                 
                 final_clips.append(watermark)
                 logger.info("[AssemblyAgent] Added watermark from %s", self.logo_path)
-                
-                # Add full frame logo flash at t=0
-                logo_flash = ImageClip(self.logo_path).with_duration(0.8)
-                if hasattr(logo_flash, "with_effects"):
-                    logo_flash = logo_flash.with_effects([Resize(width=600)])
-                elif hasattr(logo_flash, "resize"):
-                    logo_flash = logo_flash.resize(width=600)
-                
-                if hasattr(logo_flash, "crossfadeout"):
-                    logo_flash = logo_flash.crossfadeout(0.2)
-                    
-                if hasattr(logo_flash, "with_position"):
-                    logo_flash = logo_flash.with_position("center").with_start(0.0)
-                else:
-                    logo_flash = logo_flash.set_position("center").set_start(0.0)
-                
-                final_clips.append(logo_flash)
-                logger.info("[AssemblyAgent] Added logo flash at t=0")
             except Exception as e:
                 logger.warning("Failed to add watermark: %s", e)
 
