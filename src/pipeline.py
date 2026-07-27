@@ -182,10 +182,14 @@ def run_pipeline(
                 # ── Cleanup Cache ──────────────────────────────────────────
                 import glob
                 import os
+                import shutil
                 for f in glob.glob("data/cache/*"):
                     if not f.endswith(".gitkeep"):
                         try:
-                            os.remove(f)
+                            if os.path.isdir(f):
+                                shutil.rmtree(f)
+                            else:
+                                os.remove(f)
                         except Exception as e:
                             logger.warning("Failed to delete cache file %s: %s", f, e)
                 logger.info("[Pipeline] Cleaned up data/cache/ to save space after successful upload.")
