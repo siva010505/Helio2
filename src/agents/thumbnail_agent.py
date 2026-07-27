@@ -65,34 +65,52 @@ class ThumbnailAgent:
             except IOError:
                 font = ImageFont.load_default()
 
-            # Text treatment: max 3-5 words
-            words = title.split()
-            short_title = " ".join(words[:4])
-            wrapped_text = textwrap.fill(short_title, width=15)
+            # Ask the LLM for a massive clickbait hook!
+            hook_prompt = f"Write a 3-word clickbait hook for a video titled '{title}'. No quotes, no emojis, just the 3 words."
+            try:
+                clickbait_text = self.llm_client.generate_text("You are an expert YouTube thumbnail designer.", hook_prompt, max_tokens=15).strip().upper()
+                clickbait_text = clickbait_text.replace('"', '').replace("'", "")
+            except Exception as e:
+                logger.warning("Failed to generate hook, falling back to title: %s", e)
+                clickbait_text = " ".join(title.split()[:3]).upper()
+
+            wrapped_text = textwrap.fill(clickbait_text, width=12)
 
             for i, t in enumerate(timestamps):
                 frame = clip.get_frame(t)
-                img = Image.fromarray(frame)
-                draw = ImageDraw.Draw(img)
-                
-                # Draw text on left side or bottom to leave negative space
-                bbox = draw.textbbox((0, 0), wrapped_text, font=font)
-                w, h = bbox[2] - bbox[0], bbox[3] - bbox[1]
+                img = Image.fromarray(frame).convert("RGBA")
                 W, H = img.size
                 
-                # Alternate positions
-                if i % 2 == 0:
-                    x, y = 100, H - h - 100
-                else:
-                    x, y = 100, 100
+                # 1. Dramatic dark gradient overlay from the bottom up to make text POP
+                gradient = Image.new('RGBA', (W, H), (0, 0, 0, 0))
+                draw_grad = ImageDraw.Draw(gradient)
+                for gy in range(int(H * 0.4), H):
+                    alpha = int(255 * ((gy - H * 0.4) / (H * 0.6)))
+                    draw_grad.line([(0, gy), (W, gy)], fill=(0, 0, 0, alpha))
                 
-                # Draw stroke
-                outline_range = 8
-                for dx in range(-outline_range, outline_range+1):
-                    for dy in range(-outline_range, outline_range+1):
+                img = Image.alpha_composite(img, gradient)
+                draw = ImageDraw.Draw(img)
+                
+                # 2. Draw text centered near the bottom
+                bbox = draw.textbbox((0, 0), wrapped_text, font=font)
+                w, h = bbox[2] - bbox[0], bbox[3] - bbox[1]
+                
+                x = (W - w) // 2
+                y = H - h - 120
+                
+                # 3. Draw massive drop shadow
+                draw.text((x + 15, y + 15), wrapped_text, font=font, fill="black")
+                
+                # 4. Draw thick stroke for extreme readability
+                outline_range = 10
+                for dx in range(-outline_range, outline_range+1, 2):
+                    for dy in range(-outline_range, outline_range+1, 2):
                         draw.text((x+dx, y+dy), wrapped_text, font=font, fill="black")
                 
+                # 5. Draw main text in bright accent color
                 draw.text((x, y), wrapped_text, font=font, fill=self.accent_color)
+                
+                img = img.convert("RGB")
                 
                 # Add logo
                 if os.path.exists(self.logo_path):

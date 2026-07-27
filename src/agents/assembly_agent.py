@@ -289,7 +289,9 @@ class AssemblyAgent:
                     method="label"
                 )
                 
-                txt_clip = txt_clip.with_position(("center", 1400))
+                # Position it 80% down the screen so it dynamically fits both landscape and portrait!
+                y_pos = int(self.resolution[1] * 0.8)
+                txt_clip = txt_clip.with_position(("center", y_pos))
                 txt_clip = txt_clip.with_start(word["start"]).with_end(word["end"])
                 
                 caption_clips.append(txt_clip)
