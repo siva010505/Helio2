@@ -29,10 +29,10 @@ video:
   scene_target_seconds: 1.5
 
 visual_sources:
-  apis: ["pexels", "pixabay", "unsplash"]
+  apis: ["pexels", "pixabay"]
   vision_scoring:
     enabled: true
-    max_candidates_scored_per_scene: 2
+    max_candidates_scored_per_scene: 3
     fallback_if_no_good_match: "kinetic_text_card"
 
 editing:
