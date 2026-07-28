@@ -549,8 +549,6 @@ class AssemblyAgent:
         finally:
             main_video.close()
             voice_clip.close()
-            # Explicitly close TextClips to prevent memory leaks
-            for clip in caption_clips:
-                clip.close()
+            # No caption clips to close because we use zero-overhead fl() filtering
             
         return str(output_path)
