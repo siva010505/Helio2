@@ -26,17 +26,37 @@ from src.llm_client import LLMClient
 from src.agents.orchestrator import OrchestratorAgent
 
 
+class ColorFormatter(logging.Formatter):
+    RED = "\033[91m"
+    YELLOW = "\033[93m"
+    GREEN = "\033[92m"
+    RESET = "\033[0m"
+
+    def format(self, record):
+        msg = super().format(record)
+        if record.levelno >= logging.ERROR:
+            return self.RED + msg + self.RESET
+        elif record.levelno == logging.WARNING:
+            return self.YELLOW + msg + self.RESET
+        elif "upload" in record.getMessage().lower() and "success" in record.getMessage().lower():
+            return self.GREEN + msg + self.RESET
+        return msg
+
 def setup_logging(level: str = "INFO") -> None:
+    formatter = ColorFormatter("%(asctime)s [%(levelname)s] %(name)s: %(message)s")
+    
+    stream_handler = logging.StreamHandler(sys.stdout)
+    stream_handler.setFormatter(formatter)
+    
+    file_handler = logging.FileHandler(
+        os.path.join("logs", "helio.log"),
+        encoding="utf-8",
+    )
+    file_handler.setFormatter(logging.Formatter("%(asctime)s [%(levelname)s] %(name)s: %(message)s"))
+
     logging.basicConfig(
         level=getattr(logging, level.upper(), logging.INFO),
-        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
-        handlers=[
-            logging.StreamHandler(sys.stdout),
-            logging.FileHandler(
-                os.path.join("logs", "helio.log"),
-                encoding="utf-8",
-            ),
-        ],
+        handlers=[stream_handler, file_handler],
     )
 
 
