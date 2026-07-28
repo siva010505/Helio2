@@ -418,7 +418,10 @@ class AssemblyAgent:
                 frame = frame * (1 - alpha) + overlay[:, :, :3] * alpha
                 return frame.astype(np.uint8)
                 
-            main_video = main_video.fl(apply_caption)
+            if hasattr(main_video, "transform"):
+                main_video = main_video.transform(apply_caption)
+            else:
+                main_video = main_video.fl(apply_caption)
             
         final_clips = [main_video]
         if self.logo_path and os.path.exists(self.logo_path):
