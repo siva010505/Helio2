@@ -179,14 +179,14 @@ class LLMClient:
             cleaned = "\n".join(lines[1:-1] if lines[-1].strip() == "```" else lines[1:])
 
         try:
-            return json.loads(cleaned)
+            return json.loads(cleaned, strict=False)
         except json.JSONDecodeError:
             # One more pass: extract the first JSON object/array found
             import re
             match = re.search(r"(\{.*\}|\[.*\])", cleaned, re.DOTALL)
             if match:
                 try:
-                    return json.loads(match.group(1))
+                    return json.loads(match.group(1), strict=False)
                 except json.JSONDecodeError:
                     pass
             logger.error("generate_json: failed to parse JSON.\nRaw output:\n%s", raw)
