@@ -32,23 +32,46 @@ from src.db.models import Topic
 logger = logging.getLogger(__name__)
 
 # Weights for the composite score (must sum to 1.0)
+# narrative_strength is weighted highest — AVD (driven by story arc) is
+# YouTube's #1 ranking signal for long-form content.
 SCORE_WEIGHTS = {
-    "novelty": 0.25,
-    "virality": 0.35,
+    "novelty": 0.20,
+    "virality": 0.25,
     "hook_potential": 0.25,
-    "narrative_strength": 0.15,
+    "narrative_strength": 0.30,
 }
 
 SCORING_SYSTEM_PROMPT = """\
-You are a YouTube Shorts channel strategist specializing in viral content.
-You analyze topic candidates and score them to maximize watch-time, shares, and subscriber growth.
+You are a long-form YouTube content strategist specializing in psychology & human behavior channels.
+Your goal is to select the ONE topic that will hold a viewer's attention for 8–10 minutes straight.
+
+The channel produces DEEP-DIVE single-topic videos (NOT compilations or listicles).
+Each video follows: Cold Hook → Setup → Investigation → Twist → Implication → CTA.
 
 You will be given a list of topic candidates and a channel niche.
 For each topic, score it on four dimensions (each 0-10):
-  - novelty: Is the topic genuinely new and not oversaturated on YouTube?
-  - virality: How likely is it to be shared, commented on, or create strong emotion?
-  - hook_potential: How easy is it to open with a hook that stops the scroll in the first 2 seconds?
-  - narrative_strength: How strong is the underlying story or mystery?
+
+  - novelty (0-10):
+    Is this topic genuinely underexplored on YouTube? Not yet a saturated "10 amazing psychology facts" style?
+    A niche historical case scores higher than a topic with 500 existing videos.
+
+  - virality (0-10):
+    How strongly will this make a viewer feel something — shock, dread, wonder, or empathy?
+    Will they share it with "you NEED to watch this"?
+
+  - hook_potential (0-10):
+    Can we open COLD with a shocking, mid-action scene? Does the topic have a dramatic
+    inciting moment we can drop the viewer into in the first 10 seconds?
+
+  - narrative_strength (0-10):  ← MOST IMPORTANT for long-form retention
+    Does this topic have a single clear arc: a real person, real event, or real experiment
+    with a beginning, rising tension, twist, and resolution?
+    Score 9-10 ONLY if there is a specific documented story (e.g. a named person, a dated event,
+    a recorded experiment) — NOT a generic concept like "confirmation bias".
+    A topic like "The Dancing Plague of 1518" scores 10. "Why people procrastinate" scores 3.
+
+CRITICAL: Prefer topics with ONE tight narrative over topics that are interesting but diffuse.
+A single gripping true story will always outperform a collection of interesting facts.
 
 Be critical. Most topics should score 4-7. Reserve 9-10 for truly exceptional cases.
 
@@ -59,7 +82,7 @@ Respond with a JSON array. Each element maps to a topic (in the same order as th
     "virality": <int 0-10>,
     "hook_potential": <int 0-10>,
     "narrative_strength": <int 0-10>,
-    "reasoning": "<one-sentence justification>"
+    "reasoning": "<one-sentence justification focusing on narrative arc quality>"
   }
 """
 

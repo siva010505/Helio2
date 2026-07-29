@@ -24,7 +24,7 @@ from src.db.models import Video, PerformanceMetric, PromptVersion
 logger = logging.getLogger(__name__)
 
 # Agents whose prompts can be dynamically improved
-IMPROVABLE_AGENTS = ["script_agent_longform", "seo_agent_longform", "scoring_agent_longform"]
+IMPROVABLE_AGENTS = ["deep_dive_script_agent", "seo_agent_longform", "scoring_agent_longform"]
 
 ANALYSIS_SYSTEM_PROMPT = """\
 You are a senior YouTube analytics strategist and data scientist.
@@ -70,16 +70,16 @@ class EvaluationAgent:
     # Data preparation
     # ------------------------------------------------------------------
 
-    def _load_mature_metrics(self) -> List[Dict]:
+    def _load_mature_metrics(self) -> tuple[int, List[Dict]]:
         """
         Loads all performance metrics that are from videos which have
-        already passed the 72-hour maturity window.
-        Only includes records where we have at least views > 0.
+        already passed the maturity window.
+        Returns: (total_mature_record_count, latest_30_records_for_llm)
         """
         maturity_days = self.config.get("long_form", {}).get("maturity_days", 7)
         cutoff = datetime.utcnow() - timedelta(days=maturity_days)
         
-        records = (
+        query = (
             self.db.query(PerformanceMetric, Video)
             .join(Video, PerformanceMetric.video_id == Video.id)
             .filter(
@@ -87,10 +87,10 @@ class EvaluationAgent:
                 Video.youtube_video_id.isnot(None),
                 Video.upload_time <= cutoff,
             )
-            .order_by(PerformanceMetric.pulled_at.desc())
-            .limit(30)   # cap context size for LLM
-            .all()
         )
+        
+        total_records = query.count()
+        records = query.order_by(PerformanceMetric.pulled_at.desc()).limit(30).all()
 
         data = []
         for metric, video in records:
@@ -105,8 +105,8 @@ class EvaluationAgent:
                 "average_view_percentage": metric.average_view_percentage,
             })
 
-        logger.info("[EvaluationAgent] Loaded %d mature metric records for analysis.", len(data))
-        return data
+        logger.info("[EvaluationAgent] Total mature records: %d. Loaded latest %d for analysis.", total_records, len(data))
+        return total_records, data
 
     # ------------------------------------------------------------------
     # Prompt versioning helpers
@@ -159,21 +159,20 @@ class EvaluationAgent:
 
         Returns the raw LLM analysis dict.
         """
-        metrics_data = self._load_mature_metrics()
+        total_records, metrics_data = self._load_mature_metrics()
 
         min_records = self.config.get("learning", {}).get("min_videos_before_adjusting", 5)
-        record_count = len(metrics_data)
 
-        if record_count < min_records:
+        current_epoch = total_records // min_records
+
+        if current_epoch == 0:
             logger.info(
-                "[EvaluationAgent] Insufficient data (%d records). "
-                "Need at least %d mature metrics. Skipping.",
-                record_count,
-                min_records,
+                "[EvaluationAgent] Insufficient data (%d total records). "
+                "Need at least %d mature metrics for the first evaluation. Skipping.",
+                total_records,
+                min_records
             )
             return {"status": "skipped", "reason": "insufficient_data"}
-            
-        current_epoch = record_count // min_records
         
         # Check if we already evaluated this epoch for any channel/agent.
         latest_pv = self.db.query(PromptVersion).order_by(PromptVersion.version_number.desc()).first()
@@ -219,7 +218,7 @@ class EvaluationAgent:
         agent_updates = analysis.get("agent_updates", {})
         performance_summary = {
             "summary": analysis.get("summary"), 
-            "record_count": record_count,
+            "record_count": total_records,
             "epoch": current_epoch
         }
 

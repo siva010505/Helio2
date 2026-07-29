@@ -25,17 +25,36 @@ MAX_CANDIDATES = 15
 MIN_CANDIDATES = 3
 
 BRAINSTORM_PROMPT = """\
-You are an expert content strategist for a YouTube channel.
-Brainstorm a list of 15 highly engaging, evergreen, narrative-driven topic candidates for the following niche.
+You are an expert content strategist for a long-form YouTube channel in the following niche:
 Niche: {niche}
 
-Avoid recent news. Focus on psychological, behavioral, historical, or scientific mysteries that tell a compelling story.
+The channel produces DEEP-DIVE single-topic videos — one video = one complete story.
+Format: Cold Hook → Setup → Investigation → Twist → Implication (8–10 minutes each).
+
+Your task: Brainstorm 15 highly specific, narrative-rich topic candidates.
+
+WHAT WORKS (score these highly):
+  - Real historical events with a clear arc (e.g., "The Dancing Plague of 1518")
+  - Famous documented experiments with shocking outcomes (e.g., "The Stanford Prison Experiment")
+  - Real cases involving a named person and an unusual psychological phenomenon
+  - Documented mysteries that science has finally explained (or still can't)
+  - Moments where mass psychology caused bizarre collective behavior
+
+WHAT DOES NOT WORK (avoid these):
+  - Generic concepts without a story ("Why do people procrastinate?")
+  - Pure "X facts about Y" listicle topics
+  - Topics already massively saturated on YouTube (Milgram is fine, but avoid rehashing obvious angles)
+  - Topics requiring no narrative — just a definition and some statistics
+
+For each candidate, the title should be SPECIFIC (include a real name, date, or place if possible).
+A good title teases a mystery: "The Man Who Laughed Himself to Death", "The Village That Forgot to Sleep".
+
 Output ONLY a valid JSON object matching this schema:
 {{
     "candidates": [
         {{
-            "title": "A highly engaging title under 50 characters",
-            "description": "A 1-2 sentence description of the narrative arc."
+            "title": "A specific, mystery-forward title under 55 characters",
+            "description": "2-3 sentences: the real story arc — what happened, why it's strange, what the twist or revelation is."
         }}
     ]
 }}

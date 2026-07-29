@@ -54,14 +54,15 @@ quota:
   upload_cost_units: 1600
 
 learning:
-  min_videos_before_adjusting: 10
+  min_videos_before_adjusting: 5
   metrics_pulled: ["views", "likes", "comments", "average_view_duration", "average_view_percentage"]
 
 long_form:
-  target_total_length_seconds: 600
-  stories_per_video: 7
+  target_total_length_seconds: 600   # 10 minutes — YouTube's sweet spot for AVD + mid-roll ads
+  stories_per_video: 1               # ONE deep-dive story per video (not a compilation)
+  voice: "piper:en_GB-alan-medium"   # Distinct, free, documentary-style voice for long-form
   resolution: "1920x1080"
-  scene_target_seconds: 15
+  scene_target_seconds: 5            # Faster cuts = higher retention (was 15, far too slow)
   thumbnail_candidates: 4
   upload_interval_days: 3
   maturity_days: 7

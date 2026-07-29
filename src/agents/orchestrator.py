@@ -140,8 +140,8 @@ class OrchestratorAgent:
         interval_days = self.config.get("long_form", {}).get("upload_interval_days", 3)
 
         logger.info(
-            "[Orchestrator] ── Channel: %s ── Target: 1 compilation (%d stories)",
-            channel_name, stories_per_video,
+            "[Orchestrator] ── Channel: %s ── Mode: Deep Dive (1 topic → 1 full-length video)",
+            channel_name,
         )
 
         # Check if we should skip today based on upload interval
@@ -204,11 +204,12 @@ class OrchestratorAgent:
         else:
             scoring_agent = ScoringAgent(self.llm, self.db)
             try:
+                # Deep-dive mode: select exactly 1 best topic
                 selected = scoring_agent.score_and_select(
                     channel_config=ch_cfg,
                     channel_id=channel.id,
                     candidates=candidates,
-                    videos_per_day=stories_per_video,
+                    videos_per_day=1,  # Always 1 deep-dive topic per video
                 )
             except Exception as exc:
                 msg = f"ScoringAgent failed: {exc}"
@@ -231,10 +232,11 @@ class OrchestratorAgent:
         try:
             upload_times = ch_cfg.get("upload_times", [])
             publish_time_str = upload_times[0] if upload_times else None
-            
-            # Pass ALL selected stories to the compilation pipeline
+
+            # Deep-dive mode: pass only the top-scoring topic.
+            # The DeepDiveScriptAgent will use topics[0] and ignores the rest.
             video_result = self._run_video_pipeline(
-                ch_cfg, channel, selected, dry_run=dry_run, publish_time_str=publish_time_str
+                ch_cfg, channel, selected[:1], dry_run=dry_run, publish_time_str=publish_time_str
             )
             ch_summary["videos_created"].append(video_result)
         except Exception as exc:
@@ -253,7 +255,8 @@ class OrchestratorAgent:
         from src.pipeline import run_pipeline
 
         logger.info(
-            "[Orchestrator] Starting compilation pipeline with %d topics", len(topics)
+            "[Orchestrator] Starting deep-dive pipeline for topic: '%s'",
+            topics[0].get('topic_text', 'unknown') if topics else 'unknown',
         )
         result = run_pipeline(
             channel_config=ch_cfg,

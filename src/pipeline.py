@@ -61,19 +61,20 @@ def run_pipeline(
     }
 
     try:
-        # ── Phase 3: Script Generation ────────────────────────────
-        from src.agents.compilation_assembler_agent import CompilationAssemblerAgent
-        compilation_data = CompilationAssemblerAgent(llm_client, db_session).assemble_compilation(topics, channel_config)
+        # ── Phase 3: Script Generation (Deep Dive — single narrative arc) ──
+        from src.agents.deep_dive_script_agent import DeepDiveScriptAgent
+        compilation_data = DeepDiveScriptAgent(llm_client, db_session).assemble_compilation(topics, channel_config)
         script_text = compilation_data.get("full_script")
         video.script_text = script_text
-        video.hook_style = "compilation_cold_open"
+        video.hook_style = "deep_dive_cold_hook"
         db_session.commit()
-        logger.info("[Pipeline] Phase 3 (Compilation Script) complete.")
+        logger.info("[Pipeline] Phase 3 (Deep Dive Script) complete. ~%.0f words.", len(script_text.split()))
 
         # ── Phase 4: Voice Generation ──────────────────────────────
         from src.agents.voice_agent import VoiceAgent
-        voice_path = VoiceAgent(channel_config).generate_voice(script_text, channel_config.get('voice', ''), video.id)
-        video.voice_used = channel_config.get('voice', '')
+        target_voice = channel_config.get('long_form', {}).get('voice', channel_config.get('voice', ''))
+        voice_path = VoiceAgent(channel_config).generate_voice(script_text, target_voice, video.id)
+        video.voice_used = target_voice
         db_session.commit()
         logger.info("[Pipeline] Phase 4 (Voice) complete. Audio saved at %s", voice_path)
 
@@ -87,39 +88,26 @@ def run_pipeline(
             scenes = visual_planner.plan_visuals(text_segment, channel_config)
             shot_list.extend(scenes)
 
-        logger.info("[Pipeline] Planning visuals for cold open...")
-        plan_and_append(compilation_data["connective_tissue"]["cold_open"])
+        logger.info("[Pipeline] Planning visuals for full deep-dive script...")
+
+        # Deep-dive: the full script is ONE continuous narrative — plan it as one block.
+        # Section markers are used to inject chapter title cards at the right scenes.
+        section_markers = compilation_data.get("section_markers", [])
+        story_starts = []   # Will be populated by section marker matching below
+
+        plan_and_append(compilation_data["full_script"])
+
+        closing_scene_idx = len(shot_list) - 1
         
-        # Track the start indices and titles for each story
-        story_starts = []
-        chapter_titles = compilation_data["connective_tissue"].get("chapter_titles", [])
-        content_labels = compilation_data["connective_tissue"].get("content_labels", [])
-        
-        for i, story in enumerate(compilation_data["stories"]):
-            logger.info("[Pipeline] Planning visuals for story %d...", i+1)
-            # Record the index of the first scene of this story
-            story_starts.append({
-                "scene_idx": len(shot_list),
-                "title": chapter_titles[i] if i < len(chapter_titles) else f"Story {i+1}",
-                "label": content_labels[i] if i < len(content_labels) else "Story"
-            })
-            plan_and_append(story["script"])
-            if i < len(compilation_data["stories"]) - 1:
-                bridges = compilation_data["connective_tissue"].get("bridges", [])
-                bridge = bridges[i] if i < len(bridges) else ""
-                plan_and_append(bridge)
-                
-        logger.info("[Pipeline] Planning visuals for closing...")
-        closing_scene_idx = len(shot_list)
-        plan_and_append(compilation_data["connective_tissue"]["closing"])
-        
+        # Inject section chapter cards into the correct scenes by matching first_words
         for i, s in enumerate(shot_list):
             s["scene_number"] = i + 1
-            # Inject chapter markers directly into the correct scene
-            for start_data in story_starts:
-                if start_data["scene_idx"] == i:
-                    s["chapter_title"] = start_data["title"]
-                    s["content_label"] = start_data["label"]
+            seg_text = s.get("text_segment", "")
+            for marker in section_markers:
+                first_words = marker.get("first_words", "").strip()
+                if first_words and seg_text.strip().startswith(first_words[:30]):
+                    s["chapter_title"] = marker.get("section", "")
+                    s["content_label"] = "Story"
             if i == closing_scene_idx:
                 s["is_closing"] = True
             

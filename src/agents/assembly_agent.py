@@ -451,69 +451,74 @@ class AssemblyAgent:
             except Exception as e:
                 logger.warning("Failed to add watermark: %s", e)
 
-        # Generate Chapter Titles
+        # Generate Section Title Cards (deep-dive format — no story number prefix)
         from PIL import Image, ImageDraw, ImageFont
-        
-        story_idx = 1
+
         for scene in final_scenes:
             if "chapter_title" in scene:
-                title = scene["chapter_title"].strip().upper()
-                display_text = f"{story_idx}: {title}"
-                story_idx += 1
-                
+                section_name = scene["chapter_title"].strip().upper()
+                # Skip generic fallback titles
+                if not section_name or section_name in ("STORY", "FACT", "TRICK"):
+                    continue
+
                 try:
-                    # Use PIL to draw the graphic
-                    font_size = 55
+                    font_size = 52
                     try:
                         c_font = ImageFont.truetype(self.font, font_size)
-                    except:
+                        small_font = ImageFont.truetype(self.font, 28)
+                    except Exception:
                         c_font = ImageFont.load_default()
-                        
-                    # Calculate text size
+                        small_font = c_font
+
+                    # Calculate text dimensions
                     if hasattr(c_font, 'getbbox'):
-                        bbox = c_font.getbbox(display_text)
+                        bbox = c_font.getbbox(section_name)
                         text_w = bbox[2] - bbox[0]
                         text_h = bbox[3] - bbox[1]
                     else:
-                        text_w, text_h = c_font.getsize(display_text)
-                        
-                    padding_x, padding_y = 40, 20
-                    img_w, img_h = text_w + padding_x * 2, text_h + padding_y * 2
-                    
-                    img = Image.new('RGBA', (img_w, img_h), (0, 0, 0, 0))
+                        text_w, text_h = c_font.getsize(section_name)
+
+                    padding_x, padding_y = 48, 22
+                    bar_w = text_w + padding_x * 2
+                    bar_h = text_h + padding_y * 2 + 8  # extra 8px for accent line
+
+                    # Dark translucent bar (premium documentary look)
+                    img = Image.new('RGBA', (bar_w, bar_h), (0, 0, 0, 0))
                     draw = ImageDraw.Draw(img)
-                    
-                    # Draw solid red background box
-                    draw.rectangle([(0, 0), (img_w, img_h)], fill=(200, 0, 0, 255))
-                    
-                    # Draw yellow text
-                    draw.text((padding_x, padding_y - 10), display_text, font=c_font, fill=(255, 215, 0, 255))
-                    
-                    chapter_img_path = str(self.cache_dir / f"chapter_{scene['start_time']}.png")
-                    img.save(chapter_img_path)
-                    
-                    # Target resolution width for top-right alignment
-                    res_w = 1920
-                    res_h = 1080
-                    if isinstance(self.resolution, str):
-                        res_w, res_h = map(int, self.resolution.split("x"))
-                    elif isinstance(self.resolution, (tuple, list)):
-                        res_w, res_h = self.resolution
-                        
-                    x_pos = res_w - img_w - 60  # 60px padding from the right edge
-                    y_pos = 60                  # 60px padding from the top edge
-                    
-                    chapter_clip = ImageClip(chapter_img_path).with_start(scene["start_time"]).with_duration(2.5)
-                    
+
+                    # Semi-transparent dark background
+                    draw.rectangle([(0, 0), (bar_w, bar_h)], fill=(10, 10, 20, 210))
+
+                    # Accent colour line on the left edge
+                    accent_rgb = (255, 212, 0)  # default yellow
+                    try:
+                        hex_color = self.accent_color.lstrip('#')
+                        accent_rgb = tuple(int(hex_color[i:i+2], 16) for i in (0, 2, 4))
+                    except Exception:
+                        pass
+                    draw.rectangle([(0, 0), (5, bar_h)], fill=accent_rgb + (255,))
+
+                    # White section title text
+                    draw.text((padding_x, padding_y - 4), section_name, font=c_font, fill=(255, 255, 255, 255))
+
+                    section_img_path = str(self.cache_dir / f"section_{scene['start_time']:.2f}.png")
+                    img.save(section_img_path)
+
+                    # Position: bottom-left, above caption zone
+                    res_w, res_h = self.resolution
+                    x_pos = 60
+                    y_pos = res_h - bar_h - 220  # above caption area
+
+                    chapter_clip = ImageClip(section_img_path).with_start(scene["start_time"]).with_duration(2.5)
                     if hasattr(chapter_clip, "with_position"):
                         chapter_clip = chapter_clip.with_position((x_pos, y_pos))
                     else:
                         chapter_clip = chapter_clip.set_position((x_pos, y_pos))
-                        
+
                     final_clips.append(chapter_clip)
-                    logger.info(f"[AssemblyAgent] Added chapter title '{display_text}' at {scene['start_time']}")
+                    logger.info("[AssemblyAgent] Added section card '%s' at t=%.1fs", section_name, scene["start_time"])
                 except Exception as e:
-                    logger.error(f"[AssemblyAgent] Failed to draw chapter title: {e}")
+                    logger.error("[AssemblyAgent] Failed to draw section title card: %s", e)
 
         main_video = CompositeVideoClip(final_clips)
             
