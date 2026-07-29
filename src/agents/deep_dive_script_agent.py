@@ -47,9 +47,9 @@ MANDATORY NARRATIVE STRUCTURE — follow this exactly:
    - End with a question that creates an open loop: "How did this happen? And what does it tell us about ourselves?"
 
 2. SETUP THE MYSTERY (0:45–2:30, ~250 words):
+   - IMMEDIATELY introduce yourself briefly (e.g., "I'm Helio, and today we're investigating...").
    - Provide just enough background to make the topic legible — names, dates, place, context.
-   - Frame it as a puzzle the viewer will solve *with* you, not a lecture.
-   - Use second-person: "Imagine you are..." or "You're standing in..."
+   - Frame it as a puzzle the viewer will solve *with* you, not a lecture. Use first-person ("I", "we") to guide them.
    - Raise at least one additional surprising question that isn't answered yet.
 
 3. DEEP DIVE (2:30–7:00, ~700 words):
