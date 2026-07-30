@@ -1,5 +1,5 @@
 channels:
-  - name: "psychology_shorts"
+  - name: "psychology_deep_dives"
     niche: "Psychology & human behavior (narrative format)"
     videos_per_day: 1
     target_length_seconds: 75
