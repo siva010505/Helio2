@@ -458,7 +458,7 @@ class AssemblyAgent:
             if "chapter_title" in scene:
                 section_name = scene["chapter_title"].strip().upper()
                 # Skip generic fallback titles and backend terms like 'Cold Hook'
-                if not section_name or section_name in ("STORY", "FACT", "TRICK", "COLD HOOK"):
+                if not section_name or section_name in ("STORY", "FACT", "TRICK", "COLD HOOK", "FINAL THOUGHT"):
                     continue
 
                 try:

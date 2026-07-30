@@ -60,7 +60,7 @@ learning:
 long_form:
   target_total_length_seconds: 300   # 5 minutes — great sweet spot for viewer commitment and AVP
   stories_per_video: 1               # ONE deep-dive story per video (not a compilation)
-  voice: "piper:en_GB-alan-medium"   # Distinct, free, documentary-style voice for long-form
+  voice: "piper:en_US-ryan-medium"   # Consistent brand voice, but calmer pace than Shorts
   resolution: "1920x1080"
   scene_target_seconds: 5            # Faster cuts = higher retention (was 15, far too slow)
   thumbnail_candidates: 4

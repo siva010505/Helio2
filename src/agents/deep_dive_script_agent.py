@@ -71,7 +71,7 @@ MANDATORY NARRATIVE STRUCTURE — follow this exactly:
 
 6. CTA (Last few sentences):
    - Ask a genuine, specific question related to the topic for comments.
-   - Subscribe + "next video" tease (mystery but not clickbait).
+   - Subscribe + end on a chilling, thought-provoking final sentence. Do NOT tease or mention the next video.
 
 CRITICAL RULES:
 - Write as if YOU are discovering this story for the first time alongside the viewer.
