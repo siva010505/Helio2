@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
 
 # Fallback/Default Piper Voice Model URLs
 DEFAULT_VOICE = "en_US-ryan-high"
-PIPER_VOICES_BASE = "https://huggingface.co/rhasspy/piper-voices/resolve/v1.0.0/en/en_US/{speaker}/{quality}/{voice_model}"
+PIPER_VOICES_BASE = "https://huggingface.co/rhasspy/piper-voices/resolve/v1.0.0/en/{language}/{speaker}/{quality}/{voice_model}"
 
 class VoiceAgent:
     def __init__(self, config):
@@ -42,12 +42,14 @@ class VoiceAgent:
         """
         Download the ONNX model and JSON config for Piper if not present.
         """
-        # Parse voice_name to construct URL (assuming format like en_US-lessac-medium)
+        # Parse voice_name to construct URL (assuming format like en_GB-alan-medium)
         parts = voice_name.split('-')
         if len(parts) >= 3:
+            language = parts[0]
             speaker = parts[1]
             quality = parts[2]
         else:
+            language = "en_US"
             speaker = "lessac"
             quality = "medium"
             voice_name = DEFAULT_VOICE
@@ -62,8 +64,8 @@ class VoiceAgent:
             logger.info(f"[VoiceAgent] Downloading Piper model {voice_name}...")
             
             # Construct URLs
-            model_url = PIPER_VOICES_BASE.format(speaker=speaker, quality=quality, voice_model=model_filename)
-            config_url = PIPER_VOICES_BASE.format(speaker=speaker, quality=quality, voice_model=config_filename)
+            model_url = PIPER_VOICES_BASE.format(language=language, speaker=speaker, quality=quality, voice_model=model_filename)
+            config_url = PIPER_VOICES_BASE.format(language=language, speaker=speaker, quality=quality, voice_model=config_filename)
 
             try:
                 # Download config
@@ -99,7 +101,7 @@ class VoiceAgent:
         # Determine voice (strip 'kokoro:' or 'piper:' prefixes if any)
         voice_name = voice_config.split(":")[-1] if ":" in voice_config else voice_config
         # We enforce piper for now since it is easily installed and runs locally
-        if not voice_name.startswith("en_US"):
+        if not voice_name.startswith("en_"):
             logger.info(f"[VoiceAgent] Defaulting '{voice_name}' to {DEFAULT_VOICE} for Piper TTS.")
             voice_name = DEFAULT_VOICE
 
