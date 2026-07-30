@@ -457,8 +457,8 @@ class AssemblyAgent:
         for scene in final_scenes:
             if "chapter_title" in scene:
                 section_name = scene["chapter_title"].strip().upper()
-                # Skip generic fallback titles
-                if not section_name or section_name in ("STORY", "FACT", "TRICK"):
+                # Skip generic fallback titles and backend terms like 'Cold Hook'
+                if not section_name or section_name in ("STORY", "FACT", "TRICK", "COLD HOOK"):
                     continue
 
                 try:
@@ -504,10 +504,10 @@ class AssemblyAgent:
                     section_img_path = str(self.cache_dir / f"section_{scene['start_time']:.2f}.png")
                     img.save(section_img_path)
 
-                    # Position: bottom-left, above caption zone
+                    # Position: top-right corner
                     res_w, res_h = self.resolution
-                    x_pos = 60
-                    y_pos = res_h - bar_h - 220  # above caption area
+                    x_pos = res_w - bar_w - 60
+                    y_pos = 60
 
                     chapter_clip = ImageClip(section_img_path).with_start(scene["start_time"]).with_duration(2.5)
                     if hasattr(chapter_clip, "with_position"):
