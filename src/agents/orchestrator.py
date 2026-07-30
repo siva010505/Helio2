@@ -136,8 +136,10 @@ class OrchestratorAgent:
     def _run_channel(self, ch_cfg: dict, dry_run: bool, force: bool) -> dict:
         """Run research → scoring → pipeline for a single channel."""
         channel_name = ch_cfg.get("name", "unknown")
-        stories_per_video = self.config.get("long_form", {}).get("stories_per_video", 5)
-        interval_days = self.config.get("long_form", {}).get("upload_interval_days", 3)
+        long_form_cfg = self.config.get("long_form", {})
+        ch_cfg["long_form"] = long_form_cfg
+        stories_per_video = long_form_cfg.get("stories_per_video", 5)
+        interval_days = long_form_cfg.get("upload_interval_days", 3)
 
         logger.info(
             "[Orchestrator] ── Channel: %s ── Mode: Deep Dive (1 topic → 1 full-length video)",

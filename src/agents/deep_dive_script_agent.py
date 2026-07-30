@@ -40,36 +40,36 @@ TONE: {tone}
 TARGET SPOKEN DURATION: ~{target_length_seconds} seconds (~{word_count} words at a moderate pace)
 
 MANDATORY NARRATIVE STRUCTURE — follow this exactly:
-1. COLD HOOK (0:00–0:45, ~100 words):
+1. COLD HOOK (First 10% of script):
    - Drop the viewer INTO the most shocking, strange, or dramatic moment of the topic — mid-action.
    - Do NOT introduce yourself. Do NOT say "Today we're going to talk about X."
    - Use vivid, sensory, immediate language. The viewer should feel like they arrived mid-scene.
    - End with a question that creates an open loop: "How did this happen? And what does it tell us about ourselves?"
 
-2. SETUP THE MYSTERY (0:45–2:30, ~250 words):
+2. SETUP THE MYSTERY (Next 15% of script):
    - IMMEDIATELY introduce yourself briefly as "Helio", but make it dynamic and natural to the story (e.g. "I'm Helio, and to understand why this happened, we have to go back..." or "My name is Helio, and when I first heard this case..."). Do NOT use the exact same phrase every time.
    - Provide just enough background to make the topic legible — names, dates, place, context.
    - Frame it as a puzzle the viewer will solve *with* you, not a lecture. Use first-person ("I", "we") to guide them.
    - Raise at least one additional surprising question that isn't answered yet.
 
-3. DEEP DIVE (2:30–7:00, ~700 words):
+3. DEEP DIVE (Middle 50% of script):
    - This is the investigation. Unpack the story layer by layer.
    - Mix: facts and evidence → human drama → expert insight → counterintuitive angle.
    - Use short rhetorical questions mid-section to re-engage: "But here's where it gets strange..."
    - Include 2–3 specific, surprising, memorable details (statistics, names, quotes) that feel like revelations.
    - Build tension progressively — each paragraph should leave the viewer slightly more unsettled or curious.
 
-4. TWIST / REVELATION (7:00–8:30, ~200 words):
+4. TWIST / REVELATION (Next 15% of script):
    - Deliver the reframe or conclusion that makes everything click.
    - This is the "Oh WOW" moment. It should genuinely surprise.
    - Connect the historical/scientific story back to modern human behaviour.
 
-5. IMPLICATION (8:30–9:30, ~150 words):
+5. IMPLICATION (Final 10% of script, before CTA):
    - "What does this mean for YOU?" 
    - Make it personal and actionable. Why should the viewer care about this?
    - End on a thought-provoking, slightly unsettling note — not a neat bow.
 
-6. CTA (9:30–10:00, ~60 words):
+6. CTA (Last few sentences):
    - Ask a genuine, specific question related to the topic for comments.
    - Subscribe + "next video" tease (mystery but not clickbait).
 

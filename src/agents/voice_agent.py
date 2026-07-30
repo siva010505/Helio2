@@ -107,10 +107,10 @@ class VoiceAgent:
 
         output_wav = self.cache_dir / f"voice_{video_id}.wav"
         
-        # Write script to temporary text file
+        # Write script to temporary text file (append silence to prevent Piper from cutting off the last word)
         input_txt = self.cache_dir / f"script_{video_id}.txt"
         with open(input_txt, "w", encoding="utf-8") as f:
-            f.write(script_text)
+            f.write(script_text.strip() + "\n\n... ... ...\n")
 
         cmd = [
             "piper",
