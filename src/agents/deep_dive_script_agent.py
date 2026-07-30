@@ -82,13 +82,13 @@ CRITICAL RULES:
 OUTPUT: Return a JSON object with this exact schema:
 {{
   "full_script": "The complete script from cold hook to CTA...",
-  "section_titles": ["Cold Hook", "The Mystery", "The Investigation", "The Revelation", "What This Means", "Final Thought"],
+  "section_titles": ["Cold Hook", "<Custom Cinematic Title 1>", "<Custom Cinematic Title 2>", "<Custom Cinematic Title 3>", "<Custom Cinematic Title 4>", "Final Thought"],
   "section_start_lines": [
     {{"section": "Cold Hook", "first_words": "Exact first 5-6 words of this section..."}},
-    {{"section": "The Mystery", "first_words": "Exact first 5-6 words of this section..."}},
-    {{"section": "The Investigation", "first_words": "Exact first 5-6 words of this section..."}},
-    {{"section": "The Revelation", "first_words": "Exact first 5-6 words of this section..."}},
-    {{"section": "What This Means", "first_words": "Exact first 5-6 words of this section..."}},
+    {{"section": "<Custom Cinematic Title 1>", "first_words": "Exact first 5-6 words of this section..."}},
+    {{"section": "<Custom Cinematic Title 2>", "first_words": "Exact first 5-6 words of this section..."}},
+    {{"section": "<Custom Cinematic Title 3>", "first_words": "Exact first 5-6 words of this section..."}},
+    {{"section": "<Custom Cinematic Title 4>", "first_words": "Exact first 5-6 words of this section..."}},
     {{"section": "Final Thought", "first_words": "Exact first 5-6 words of this section..."}}
   ]
 }}
