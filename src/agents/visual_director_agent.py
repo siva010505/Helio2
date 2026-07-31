@@ -77,8 +77,12 @@ class VisualDirectorAgent:
                     
             scene_end = words[word_idx - 1]["end"] if word_idx > 0 else 0.0
             
-            if i == len(scenes) - 1 and word_idx < total_words:
-                scene_end = words[-1]["end"]
+            if i == len(scenes) - 1:
+                if word_idx < total_words:
+                    scene_end = words[-1]["end"]
+                # Add a 4-second buffer to the final scene to cover audio reverb/trailing silence.
+                # assembly_agent will trim any excess down to the exact voice_clip.duration.
+                scene_end += 4.0
                 
             aligned.append({
                 **scene,
