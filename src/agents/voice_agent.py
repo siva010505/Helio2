@@ -120,7 +120,7 @@ class VoiceAgent:
             "-c", str(config_path),
             "-i", str(input_txt),
             "-f", str(output_wav),
-            "--length_scale", "1.0",
+            "--length_scale", "1.15",
         ]
         
         logger.info("[VoiceAgent] Executing Piper TTS...")
