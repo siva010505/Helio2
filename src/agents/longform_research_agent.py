@@ -31,20 +31,15 @@ Niche: {niche}
 The channel produces DEEP-DIVE single-topic videos — one video = one complete story.
 Format: Cold Hook → Setup → Investigation → Twist → Implication (8–10 minutes each).
 
-Your task: Brainstorm 15 highly specific, narrative-rich topic candidates.
+Below is a list of the channel's top-performing Short-form videos, sorted by their ability to retain viewers (Average View Percentage and Average View Duration).
 
-WHAT WORKS (score these highly):
-  - Real historical events with a clear arc (e.g., "The Dancing Plague of 1518")
-  - Famous documented experiments with shocking outcomes (e.g., "The Stanford Prison Experiment")
-  - Real cases involving a named person and an unusual psychological phenomenon
-  - Documented mysteries that science has finally explained (or still can't)
-  - Moments where mass psychology caused bizarre collective behavior
+HIGH-RETENTION SHORTS DATA:
+{shorts_data}
 
-WHAT DOES NOT WORK (avoid these):
-  - Generic concepts without a story ("Why do people procrastinate?")
-  - Pure "X facts about Y" listicle topics
-  - Topics already massively saturated on YouTube (Milgram is fine, but avoid rehashing obvious angles)
-  - Topics requiring no narrative — just a definition and some statistics
+Your task:
+1. Analyze the PATTERNS of these high-retention shorts. What themes, mysteries, psychological hooks, or emotional triggers kept viewers watching?
+2. Brainstorm 15 highly specific, narrative-rich long-form candidate topics that perfectly leverage these successful patterns.
+3. CRITICAL RULE: Do NOT generate topics that are exactly the same as the Shorts data provided. You must generate COMPLETELY NEW stories, cases, or incidents that share the same *underlying pattern* but are entirely different topics.
 
 For each candidate, the title should be SPECIFIC (include a real name, date, or place if possible).
 A good title teases a mystery: "The Man Who Laughed Himself to Death", "The Village That Forgot to Sleep".
@@ -156,10 +151,10 @@ class LongformResearchAgent:
             logger.error(f"[LongformResearchAgent] Failed to connect to Shorts DB: {e}")
             self.ShortsSession = None
 
-    def _fetch_shorts_seeds(self) -> list[dict]:
-        """Fetch top performing shorts from the last 30 days as long-form seeds."""
+    def _fetch_shorts_patterns(self) -> str:
+        """Fetch top performing shorts from the last 30 days to use as pattern analysis data."""
         if not self.ShortsSession:
-            return []
+            return "No Shorts data available."
             
         session = self.ShortsSession()
         try:
@@ -169,39 +164,30 @@ class LongformResearchAgent:
                     topics.topic_text, 
                     videos.description, 
                     performance_metrics.views, 
-                    performance_metrics.likes, 
+                    performance_metrics.average_view_duration,
                     performance_metrics.average_view_percentage
                 FROM videos
                 JOIN performance_metrics ON videos.id = performance_metrics.video_id
                 JOIN topics ON videos.topic_id = topics.id
                 WHERE videos.upload_time >= datetime('now', '-30 days')
                   AND videos.status = 'uploaded'
-                ORDER BY performance_metrics.views DESC
-                LIMIT 10
+                ORDER BY performance_metrics.average_view_percentage DESC, performance_metrics.average_view_duration DESC, performance_metrics.views DESC
+                LIMIT 20
             """)
             
             results = session.execute(query).fetchall()
             
-            seeds = []
+            lines = []
             for row in results:
-                seeds.append({
-                    "title": row.topic_text,
-                    "description": row.description or "",
-                    "source": "shorts_seed",
-                    "original_context": {
-                        "original_topic": row.topic_text,
-                        "original_description": row.description,
-                        "metrics": {
-                            "views": row.views,
-                            "likes": row.likes,
-                            "avp": row.average_view_percentage
-                        }
-                    }
-                })
-            return seeds
+                lines.append(
+                    f"- Topic: {row.topic_text}\n"
+                    f"  Description: {row.description}\n"
+                    f"  Metrics: AVP={row.average_view_percentage}%, AVD={row.average_view_duration}s, Views={row.views}\n"
+                )
+            return "\n".join(lines) if lines else "No recent Shorts data available."
         except Exception as e:
             logger.error(f"[LongformResearchAgent] Error querying Shorts DB: {e}")
-            return []
+            return "No Shorts data available due to DB error."
         finally:
             session.close()
 
@@ -225,29 +211,28 @@ class LongformResearchAgent:
             .all()
         ]
 
-        # 1. Fetch from Shorts DB
-        shorts_candidates = self._fetch_shorts_seeds()
-        logger.info(f"[LongformResearchAgent] Found {len(shorts_candidates)} seed candidates from Shorts DB.")
+        # 1. Fetch Shorts Data for Pattern Analysis
+        shorts_data_str = self._fetch_shorts_patterns()
 
         # 2. Brainstorm via LLM
         try:
-            system_prompt = BRAINSTORM_PROMPT.format(niche=niche)
-            user_prompt = "Generate the JSON response with 15 candidates now."
+            system_prompt = BRAINSTORM_PROMPT.format(niche=niche, shorts_data=shorts_data_str)
+            user_prompt = "Analyze the data and generate the JSON response with 15 completely new candidates now."
             
             response = self.llm.generate_json(
                 system_prompt=system_prompt,
                 user_prompt=user_prompt,
                 temperature=0.8,
-                max_tokens=1500
+                max_tokens=2000
             )
             llm_candidates = response.get("candidates", [])
             for raw in llm_candidates:
-                raw["source"] = "llm_brainstorm"
+                raw["source"] = "llm_pattern_analysis"
         except Exception as exc:
-            logger.error("[LongformResearchAgent] LLM brainstorming failed: %s", exc)
+            logger.error("[LongformResearchAgent] LLM pattern brainstorming failed: %s", exc)
             llm_candidates = []
 
-        all_raw = shorts_candidates + llm_candidates
+        all_raw = llm_candidates
 
         # 3. Deduplicate
         seen_titles: set[str] = set()
