@@ -12,11 +12,16 @@ from typing import Dict, Any
 logger = logging.getLogger(__name__)
 
 SEO_PROMPT = """\
-You are an expert YouTube Shorts strategist and copywriter.
-Your goal is to generate highly clickable metadata for the following YouTube Short.
+You are an expert YouTube long-form documentary strategist.
+Your goal is to generate highly clickable, dramatic, true-crime/mystery style metadata for the following deep-dive video.
 
 Constraints:
-1. Title: Under 60 characters, highly engaging, creating curiosity or urgency. (e.g., "The AI Tool Nobody is Talking About! 🤯")
+1. Title: Create a high-CTR, dramatic title. Do NOT use emojis. It should sound like a premium documentary or a compelling true story.
+   Examples of good titles:
+   - The Man Who Killed While Sleepwalking (True Story)
+   - He Committed Murder... While Asleep
+   - The Sleepwalking Murder That Shocked Psychologists
+   - Can You Kill Someone While Sleepwalking?
 2. Description: A brief 2-3 sentence summary of the video, followed by 3-5 relevant hashtags.
 3. Tags: A list of 5-8 highly relevant comma-separated tags for the YouTube algorithm.
 
