@@ -172,10 +172,14 @@ class LongformResearchAgent:
                 WHERE videos.upload_time >= datetime('now', '-30 days')
                   AND videos.status = 'uploaded'
                 ORDER BY performance_metrics.average_view_percentage DESC, performance_metrics.average_view_duration DESC, performance_metrics.views DESC
-                LIMIT 20
+                LIMIT 40
             """)
             
             results = session.execute(query).fetchall()
+            
+            import random
+            if len(results) > 10:
+                results = random.sample(results, 10)
             
             lines = []
             for row in results:
@@ -222,7 +226,7 @@ class LongformResearchAgent:
             response = self.llm.generate_json(
                 system_prompt=system_prompt,
                 user_prompt=user_prompt,
-                temperature=0.8,
+                temperature=0.9,
                 max_tokens=2000
             )
             llm_candidates = response.get("candidates", [])
