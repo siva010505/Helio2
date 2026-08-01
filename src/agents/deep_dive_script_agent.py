@@ -54,6 +54,7 @@ MANDATORY NARRATIVE STRUCTURE — follow this exactly:
 
 3. DEEP DIVE (Middle 50% of script):
    - This is the investigation. Unpack the story layer by layer.
+   - MANDATORY LENGTH: This section MUST be at least 4 to 5 long, highly detailed paragraphs. Do NOT rush the story. Take your time to build suspense.
    - Mix: facts and evidence → human drama → expert insight → counterintuitive angle.
    - Use short rhetorical questions mid-section to re-engage: "But here's where it gets strange..."
    - Include 2–3 specific, surprising, memorable details (statistics, names, quotes) that feel like revelations.
