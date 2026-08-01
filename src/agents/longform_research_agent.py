@@ -64,6 +64,7 @@ def _deduplicate(
     candidates: list[dict],
     existing_topics: list[str],
     seen_titles: set,
+    llm_client=None,
 ) -> list[dict]:
     from difflib import SequenceMatcher
 
@@ -75,8 +76,9 @@ def _deduplicate(
         return SequenceMatcher(None, a_lower, b_lower).ratio() >= threshold
 
     accepted_titles: list[str] = []
-    unique = []
+    unique_pass_1 = []
 
+    # Pass 1: Fast string matching
     for c in candidates:
         title = c["title"].strip()
         if not title:
@@ -89,9 +91,50 @@ def _deduplicate(
             continue
         seen_titles.add(title)
         accepted_titles.append(title)
-        unique.append(c)
+        unique_pass_1.append(c)
 
-    return unique
+    # Pass 2: Semantic AI Matching
+    if not llm_client or not existing_topics or not unique_pass_1:
+        return unique_pass_1
+
+    try:
+        logger.info("[LongformResearchAgent] Running Semantic AI deduplication on %d candidates...", len(unique_pass_1))
+        system_prompt = (
+            "You are a strict deduplication engine. You will be given a list of PAST video topics "
+            "and a list of NEW candidate topics.\n\n"
+            "Your job is to identify if any NEW candidate describes the EXACT SAME historical event, "
+            "person, or specific subject matter as any of the PAST topics, regardless of what the title is.\n\n"
+            "Output ONLY a JSON array of the exact titles from the NEW candidates list that are semantic duplicates. "
+            "If none are duplicates, output an empty array [].\n"
+            'Format: {"duplicates": ["Title 1", "Title 2"]}'
+        )
+        
+        past_str = "\n".join(f"- {t}" for t in existing_topics)
+        new_str = "\n".join(f"- {c['title']}: {c.get('description', '')}" for c in unique_pass_1)
+        
+        user_prompt = f"PAST TOPICS:\n{past_str}\n\nNEW CANDIDATES:\n{new_str}"
+        
+        response = llm_client.generate_json(
+            system_prompt=system_prompt,
+            user_prompt=user_prompt,
+            temperature=0.1,
+            max_tokens=500
+        )
+        
+        semantic_duplicates = set(response.get("duplicates", []))
+        if semantic_duplicates:
+            logger.info("[LongformResearchAgent] Semantic AI flagged duplicates: %s", semantic_duplicates)
+            
+        unique_pass_2 = []
+        for c in unique_pass_1:
+            if c["title"] not in semantic_duplicates:
+                unique_pass_2.append(c)
+                
+        return unique_pass_2
+        
+    except Exception as exc:
+        logger.error("[LongformResearchAgent] Semantic deduplication failed, falling back to Pass 1 results: %s", exc)
+        return unique_pass_1
 
 
 class LongformResearchAgent:
@@ -208,7 +251,7 @@ class LongformResearchAgent:
 
         # 3. Deduplicate
         seen_titles: set[str] = set()
-        unique = _deduplicate(all_raw, existing_topics, seen_titles)
+        unique = _deduplicate(all_raw, existing_topics, seen_titles, llm_client=self.llm)
         unique = unique[:MAX_CANDIDATES]
 
         logger.info("[LongformResearchAgent] Unique candidates after dedup: %d", len(unique))
