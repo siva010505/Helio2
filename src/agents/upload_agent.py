@@ -24,9 +24,10 @@ from sqlalchemy import cast, Date
 logger = logging.getLogger(__name__)
 
 class UploadAgent:
-    def __init__(self, config: Dict[str, Any], db_session=None):
+    def __init__(self, config: Dict[str, Any], db_session=None, llm_client=None):
         self.config = config
         self.db = db_session
+        self.llm_client = llm_client
         self.credentials_file = self.config.get("youtube", {}).get("client_secret_file", "client_secret.json")
         self.token_file = "token.pickle"
         
@@ -82,6 +83,7 @@ class UploadAgent:
         thumbnail_path: str = None,
         publish_time_str: str = None,
         dry_run: bool = False,
+        script_text: str = "",
     ) -> str:
         """
         Uploads the video to YouTube.
@@ -179,6 +181,30 @@ class UploadAgent:
             except Exception as e:
                 logger.warning("[UploadAgent] Failed to upload custom thumbnail: %s", e)
         
+        # Generate actual_content_summary
+        actual_content_summary = ""
+        if getattr(self, "llm_client", None) and script_text:
+            try:
+                logger.info("[UploadAgent] Generating actual_content_summary for cross-promotion...")
+                system_prompt = (
+                    "You are a cross-promotion assistant. Read the following script and write a 2-3 sentence "
+                    "summary explaining the ACTUAL story, experiment, or incident covered in it. "
+                    "CRITICAL RULE: Do NOT just repeat the title or the hook. The Shorts pipeline AI will use this "
+                    "summary as background context to write an engaging promotional Short, so it must explain "
+                    "what the video actually talks about. This ensures the Shorts AI doesn't hallucinate an unrelated story.\n\n"
+                    'Output exactly this JSON format: {"summary": "your summary here"}'
+                )
+                
+                response = self.llm_client.generate_json(
+                    system_prompt=system_prompt,
+                    user_prompt=script_text,
+                    temperature=0.3,
+                    max_tokens=300
+                )
+                actual_content_summary = response.get("summary", "")
+            except Exception as e:
+                logger.error("[UploadAgent] Failed to generate actual_content_summary: %s", e)
+
         # Write shared pointer file
         try:
             shared_file = Path("latest_long_form.json")
@@ -186,10 +212,9 @@ class UploadAgent:
             import json
             with open(shared_file, "w") as f:
                 json.dump({
-                    "video_id": video_id,
                     "title": title,
-                    "url": f"https://youtu.be/{video_id}",
-                    "uploaded_at": datetime.utcnow().isoformat() + "Z"
+                    "link": f"https://youtu.be/{video_id}" if video_id else "",
+                    "actual_content_summary": actual_content_summary
                 }, f, indent=2)
             logger.info("[UploadAgent] Wrote shared pointer to %s", shared_file)
         except Exception as e:

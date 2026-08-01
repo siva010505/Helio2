@@ -168,14 +168,15 @@ def run_pipeline(
         if not dry_run:
             from src.agents.upload_agent import UploadAgent
             try:
-                youtube_video_id = UploadAgent(channel_config, db_session=db_session).upload_video(
+                youtube_video_id = UploadAgent(channel_config, db_session=db_session, llm_client=llm_client).upload_video(
                     video_path=video.file_path,
                     title=video.title,
                     description=video.description,
                     tags=json.loads(video.tags_json) if video.tags_json else [],
                     thumbnail_path=video.thumbnail_path,
                     publish_time_str=publish_time_str,
-                    dry_run=dry_run
+                    dry_run=dry_run,
+                    script_text=video.script_text
                 )
                 video.youtube_video_id = youtube_video_id
                 video.status = "uploaded"
