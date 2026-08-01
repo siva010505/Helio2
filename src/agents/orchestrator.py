@@ -157,10 +157,9 @@ class OrchestratorAgent:
         
         if last_video and last_video.upload_time:
             days_since = (datetime.utcnow() - last_video.upload_time).days
-            if days_since < interval_days and not (dry_run or force):
-                msg = f"Skipping: only {days_since} days since last upload (interval is {interval_days})"
-                logger.info("[Orchestrator] %s", msg)
-                return {"channel": channel_name, "skipped": True, "reason": msg}
+            # The user requested to remove the skipping logic. 
+            # The workflow will now always run on schedule or manual dispatch.
+            logger.info("[Orchestrator] Last upload was %d days ago. Proceeding with run.", days_since)
 
         ch_summary = {
             "channel": channel_name,
